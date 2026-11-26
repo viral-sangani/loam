@@ -6,11 +6,11 @@ import type { FunctionReturnType } from "convex/server";
 import { ArrowUp } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Button } from "@/components/ui/button";
 import type { Pos } from "@/lib/anchors";
 import { Answer } from "./answer";
-import { CompanionTabs, DeleteButton, Pending, useJump } from "./panel-bits";
-import { Sheet } from "./sheet";
+import { IconBtn } from "./kit";
+import { CompanionTabs, DeleteButton, useJump } from "./panel-bits";
+import { Failed, Loading, SectionLabel, Sheet, SheetBody } from "./sheet";
 
 /** Starters that can only be answered from what's been read, so none of them invites a spoiler. */
 const STARTERS = [
@@ -61,13 +61,13 @@ export function BookAskPanel({
   return (
     <Sheet title="Ask the book" variant="side" onClose={onClose}>
       {onSwitch && <CompanionTabs current="ask" onSwitch={onSwitch} />}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
+      <SheetBody>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void ask(draft);
           }}
-          className="flex items-end gap-2 rounded-2xl border border-border bg-background px-3 py-2 focus-within:border-ring/60"
+          className="flex items-end gap-2 rounded-lg border border-input bg-background py-1 pr-1 pl-3 transition-colors duration-150 focus-within:border-ring/50"
         >
           <textarea
             value={draft}
@@ -80,39 +80,42 @@ export function BookAskPanel({
                 void ask(draft);
               }
             }}
-            placeholder={ready ? "Ask about the book so far…" : "Finding your place…"}
+            placeholder={ready ? "Ask about the book so far" : "Loading…"}
             aria-label="Your question"
             maxLength={1000}
-            className="field-sizing-content max-h-40 min-h-7 flex-1 resize-none bg-transparent py-1 text-[15px] leading-snug placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-60"
+            className="field-sizing-content max-h-40 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-sm leading-5 placeholder:text-muted-foreground focus:outline-none disabled:opacity-60 pointer-coarse:min-h-11 pointer-coarse:py-3 pointer-coarse:text-base"
           />
-          <Button type="submit" size="icon-sm" aria-label="Ask" disabled={!ready || sending || !draft.trim()} className="rounded-full pointer-coarse:size-11">
+          <IconBtn type="submit" tone="primary" size="sm" label="Ask" disabled={!ready || sending || !draft.trim()}>
             <ArrowUp />
-          </Button>
+          </IconBtn>
         </form>
-        <p className="mt-2 text-xs text-muted-foreground">Answers only use the text up to where you are, so nothing ahead is spoiled.</p>
+        <p className="mt-2 text-xs leading-4 text-muted-foreground">Answers use only the pages you&apos;ve read.</p>
 
         {!draft && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {STARTERS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                disabled={!ready || sending}
-                onClick={() => void ask(s)}
-                className="rounded-full border border-border px-3 py-1.5 text-left text-sm text-foreground/80 transition-colors hover:bg-muted disabled:opacity-50 pointer-coarse:py-2.5"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <section className="mt-6 space-y-2">
+            <SectionLabel>Try asking</SectionLabel>
+            <div className="space-y-2">
+              {STARTERS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={!ready || sending}
+                  onClick={() => void ask(s)}
+                  className="flex min-h-9 w-full cursor-pointer items-center rounded-lg border border-border px-3 py-2 text-left text-sm leading-5 transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-45 pointer-coarse:min-h-11"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </section>
         )}
 
-        <div className="mt-6 space-y-6">
+        <div className="mt-6">
           {mine.map((a) => (
             <BookQuestion key={a._id} ask={a} onJump={jump} />
           ))}
         </div>
-      </div>
+      </SheetBody>
     </Sheet>
   );
 }
@@ -123,21 +126,16 @@ function BookQuestion({ ask, onJump }: { ask: BookAsk; onJump: (pos: Pos) => voi
   const retry = useMutation(api.asks.retry);
   const remove = useMutation(api.asks.remove);
   return (
-    <article className="border-t border-border/60 pt-4 first:border-0 first:pt-0">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="pt-0.5 text-[15px] leading-snug font-medium">{ask.question}</h3>
-        <DeleteButton label="Delete question" onDelete={() => void remove({ askId: ask._id })} />
+    <article className="border-t border-border py-5 first:border-t-0 first:pt-0">
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="min-w-0 pt-1 text-base leading-6 font-medium pointer-coarse:pt-2.5">{ask.question}</h3>
+        <div className="-mr-2">
+          <DeleteButton label="Delete question" onDelete={() => void remove({ askId: ask._id })} />
+        </div>
       </div>
       <div className="mt-2">
-        {ask.status === "pending" && <Pending note="Reading back through what you've read…" />}
-        {ask.status === "error" && (
-          <p className="text-sm text-destructive">
-            Couldn&apos;t get an answer.{" "}
-            <button type="button" className="text-primary underline underline-offset-4" onClick={() => void retry({ askId: ask._id })}>
-              Retry
-            </button>
-          </p>
-        )}
+        {ask.status === "pending" && <Loading label="Answering…" />}
+        {ask.status === "error" && <Failed message="Couldn't get an answer." onRetry={() => void retry({ askId: ask._id })} />}
         {ask.status === "ready" && ask.answer && <Answer text={ask.answer} onCite={onJump} />}
       </div>
     </article>

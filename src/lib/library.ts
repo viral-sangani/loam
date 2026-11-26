@@ -13,14 +13,23 @@ export type Progress = {
   chapter: string | null;
 };
 
+export const READER_THEMES = ["paper", "sepia", "night"] as const;
+export type ReaderTheme = (typeof READER_THEMES)[number];
+
 export type ReaderPrefs = {
   fontSize: number; // percent
   lineHeight: number;
-  theme: "light" | "dark";
+  theme: ReaderTheme;
   showProgress: boolean;
 };
 
-export const DEFAULT_PREFS: ReaderPrefs = { fontSize: 105, lineHeight: 1.65, theme: "light", showProgress: true };
+export const DEFAULT_PREFS: ReaderPrefs = { fontSize: 105, lineHeight: 1.65, theme: "paper", showProgress: true };
+
+/** Themes saved before Paper and Sepia existed: "light" (parchment) opens as Paper, "dark" as Night. */
+function readTheme(t: unknown): ReaderTheme {
+  if (t === "dark") return "night";
+  return READER_THEMES.includes(t as ReaderTheme) ? (t as ReaderTheme) : "paper";
+}
 
 interface CacheDB extends DBSchema {
   files: { key: string; value: Blob }; // by storage id
@@ -77,7 +86,8 @@ export async function saveLocations(id: string, json: string) {
 const PREFS_KEY = "loam:reader-prefs";
 export function loadPrefs(): ReaderPrefs {
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") };
+    const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as Partial<Record<keyof ReaderPrefs, unknown>>;
+    return { ...DEFAULT_PREFS, ...saved, theme: readTheme(saved.theme) } as ReaderPrefs;
   } catch {
     return DEFAULT_PREFS;
   }

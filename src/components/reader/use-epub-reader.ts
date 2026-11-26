@@ -13,8 +13,10 @@ import {
   loadPrefs,
   saveLocations,
   savePrefs,
+  READER_THEMES,
   type Progress,
   type ReaderPrefs,
+  type ReaderTheme,
 } from "@/lib/library";
 import { INK, flatten, type Entry } from "./config";
 import { paint, paragraphAt, paragraphsOf } from "./highlights";
@@ -76,6 +78,90 @@ function applyPrefs(r: Rendition, p: ReaderPrefs) {
   r.themes.fontSize(`${p.fontSize}%`);
   r.themes.override("line-height", String(p.lineHeight), true);
   r.themes.override("color", INK[p.theme], true);
+  // epub.js puts the selected theme's name on each section's <body>; the rules below key off it.
+  r.themes.select(`loam-${p.theme}`);
+}
+
+/** Colours painted over the text, per theme. Washes stay light so the ink keeps its contrast. */
+type Paint = {
+  selection: string;
+  word: string;
+  flash: string;
+  term: string;
+  note: string;
+  link: string;
+  yellow: string;
+  green: string;
+  rose: string;
+  blue: string;
+};
+const PAINT: Record<ReaderTheme, Paint> = {
+  paper: {
+    selection: "rgba(28,28,28,.13)",
+    word: "rgba(28,28,28,.11)",
+    flash: "rgba(28,28,28,.08)",
+    term: "rgba(28,28,28,.55)",
+    note: "rgba(28,28,28,.7)",
+    link: "rgba(28,28,28,.4)",
+    yellow: "rgba(245,200,40,.32)",
+    green: "rgba(96,168,88,.24)",
+    rose: "rgba(232,96,112,.2)",
+    blue: "rgba(72,136,224,.2)",
+  },
+  sepia: {
+    selection: "rgba(122,140,80,.28)",
+    word: "rgba(122,140,80,.32)",
+    flash: "rgba(122,140,80,.3)",
+    term: "rgba(176,112,64,.85)",
+    note: "rgba(176,112,64,.6)",
+    link: "rgba(120,100,70,.4)",
+    yellow: "rgba(226,184,52,.34)",
+    green: "rgba(128,160,84,.32)",
+    rose: "rgba(214,112,112,.3)",
+    blue: "rgba(96,146,206,.3)",
+  },
+  night: {
+    selection: "rgba(170,190,130,.26)",
+    word: "rgba(170,190,130,.3)",
+    flash: "rgba(226,220,200,.12)",
+    term: "rgba(222,160,110,.75)",
+    note: "rgba(222,160,110,.7)",
+    link: "rgba(226,217,201,.4)",
+    yellow: "rgba(226,184,52,.3)",
+    green: "rgba(128,170,84,.3)",
+    rose: "rgba(224,112,112,.3)",
+    blue: "rgba(96,150,216,.32)",
+  },
+};
+
+/** Rules for the book frame: one block per theme, scoped by the class epub.js puts on <body>. */
+function themeRules() {
+  const rules: Record<string, Record<string, string>> = {};
+  const on = (t: ReaderTheme, sel: string) => `body.loam-${t}${sel}, body.loam-${t} ${sel}`;
+  // Plain rules first: a browser without ::highlight() rejects those, and epub.js stops at the first rejection.
+  for (const t of READER_THEMES) {
+    rules[`body.loam-${t} a`] = { "text-decoration-color": `${PAINT[t].link} !important` };
+    rules[on(t, "::selection")] = { background: PAINT[t].selection };
+  }
+  for (const t of READER_THEMES) {
+    const c = PAINT[t];
+    const wash = (bg: string) => ({ "background-color": bg, color: "inherit" });
+    // Painted with the CSS Custom Highlight API, so the book's markup (and its CFIs) never change.
+    rules[on(t, "::highlight(loam-word)")] = wash(c.word);
+    rules[on(t, "::highlight(loam-term)")] = {
+      "text-decoration": `underline dotted ${c.term} 1.5px`,
+      "text-underline-offset": "3px",
+    };
+    rules[on(t, "::highlight(loam-mark-yellow)")] = wash(c.yellow);
+    rules[on(t, "::highlight(loam-mark-green)")] = wash(c.green);
+    rules[on(t, "::highlight(loam-mark-rose)")] = wash(c.rose);
+    rules[on(t, "::highlight(loam-mark-blue)")] = wash(c.blue);
+    rules[on(t, "::highlight(loam-mark-note)")] = { "text-decoration": `underline ${c.note} 1.5px`, "text-underline-offset": "4px" };
+    // A selection kept while its note or question is typed (the frame's own selection is lost on focus).
+    rules[on(t, "::highlight(loam-picked)")] = wash(c.selection);
+    rules[on(t, "::highlight(loam-flash)")] = wash(c.flash);
+  }
+  return rules;
 }
 
 /**
@@ -251,27 +337,9 @@ export function useEpubReader(
           "line-height": "inherit !important",
           color: "inherit !important",
         },
-        a: { color: "inherit !important", "text-decoration-color": "rgba(120,100,70,.4) !important" },
-        "::selection": { background: "rgba(122,140,80,.28)" },
+        a: { color: "inherit !important" },
         img: { "max-width": "100% !important", "max-height": "90vh !important", "object-fit": "contain" },
-        // Painted with the CSS Custom Highlight API, so the book's markup (and its CFIs) never change.
-        "::highlight(loam-word)": { "background-color": "rgba(122,140,80,.32)", color: "inherit" },
-        "::highlight(loam-term)": {
-          "text-decoration": "underline dotted rgba(176,112,64,.85) 1.5px",
-          "text-underline-offset": "3px",
-        },
-        // Highlights: translucent washes that tint the page in both parchment and night.
-        "::highlight(loam-mark-yellow)": { "background-color": "rgba(226,184,52,.34)", color: "inherit" },
-        "::highlight(loam-mark-green)": { "background-color": "rgba(128,160,84,.32)", color: "inherit" },
-        "::highlight(loam-mark-rose)": { "background-color": "rgba(214,112,112,.3)", color: "inherit" },
-        "::highlight(loam-mark-blue)": { "background-color": "rgba(96,146,206,.3)", color: "inherit" },
-        "::highlight(loam-mark-note)": {
-          "text-decoration": "underline rgba(176,112,64,.6) 1.5px",
-          "text-underline-offset": "4px",
-        },
-        // A selection kept while its note or question is typed (the frame's own selection is lost on focus).
-        "::highlight(loam-picked)": { "background-color": "rgba(122,140,80,.28)", color: "inherit" },
-        "::highlight(loam-flash)": { "background-color": "rgba(122,140,80,.3)", color: "inherit" },
+        ...themeRules(),
       });
       applyPrefs(rendition, prefsRef.current);
 

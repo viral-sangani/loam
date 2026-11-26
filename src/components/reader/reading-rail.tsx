@@ -214,7 +214,7 @@ export function ReadingRail({
               // A 1px gap between sections, unless the section is too short to spare it.
               style={{ top: `${s.start * 100}%`, height: `max(1px, calc(${s.size * 100}% - 1px))` }}
             >
-              {read > 0 && <div className="bg-primary/45" style={{ height: `${read * 100}%` }} />}
+              {read > 0 && <div className="bg-muted-foreground/60" style={{ height: `${read * 100}%` }} />}
             </div>
           );
         })}
@@ -250,14 +250,14 @@ export function ReadingRail({
 
         {hover !== null && hoverPos && (
           <>
-            <div aria-hidden className="absolute -inset-x-[4px] h-px bg-primary" style={top(hover)} />
+            <div aria-hidden className="absolute -inset-x-[4px] h-px bg-foreground" style={top(hover)} />
             <div
               aria-hidden
-              className="pointer-events-none absolute right-full mr-3 flex max-w-64 -translate-y-1/2 items-baseline gap-2 rounded-md border border-border bg-popover px-2 py-1 whitespace-nowrap text-popover-foreground shadow-sm"
+              className="pointer-events-none absolute right-full mr-3 flex max-w-64 -translate-y-1/2 items-baseline gap-2 rounded-md border border-border bg-popover px-2 py-1 whitespace-nowrap text-popover-foreground shadow-sm shadow-black/5"
               style={top(hover)}
             >
-              {hoverChapter && <span className="min-w-0 truncate font-serif text-xs italic">{hoverChapter}</span>}
-              <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">{pct(hover)}</span>
+              {hoverChapter && <span className="min-w-0 truncate text-xs">{hoverChapter}</span>}
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{pct(hover)}</span>
             </div>
           </>
         )}

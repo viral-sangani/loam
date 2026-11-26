@@ -62,4 +62,4 @@ prod Convex URL so it serves the live site.
 ## Reader shortcuts
 
 `← →` / `Space` pages · `[ ]` chapters · `C` contents · `M` notebook · `Q` ask the book · `R` story so
-far · `A` audiobook · `K` play/pause · `−` `=` text size · `N` parchment/night · `P` progress · `?` all shortcuts
+far · `A` audiobook · `K` play/pause · `−` `=` text size · `N` paper/sepia/night · `P` progress · `?` all shortcuts

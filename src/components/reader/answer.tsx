@@ -3,6 +3,7 @@
 import { Fragment, type ReactNode } from "react";
 import { CITATION, type Pos } from "@/lib/anchors";
 import { cn } from "@/lib/utils";
+import { Bullet } from "./sheet";
 
 /**
  * A small Markdown subset for AI answers: paragraphs, "- " lists, **bold**, *italic*, `code`,
@@ -10,37 +11,46 @@ import { cn } from "@/lib/utils";
  * which the model marks once so a skimmer can stop there. Re-parsing on each render is cheap.
  */
 export function Answer({ text, onCite, className }: { text: string; onCite?: (pos: Pos) => void; className?: string }) {
-  const blocks = text.trim().split(/\n{2,}/);
+  // Paragraphs are split on blank lines; within one, a run of "- " lines is a list and the rest
+  // is text (so a "Who's who:" line straight above its list still gets real bullets).
+  const runs = text
+    .trim()
+    .split(/\n{2,}/)
+    .flatMap((block) => {
+      const out: { list: boolean; lines: string[] }[] = [];
+      for (const line of block.split("\n")) {
+        const list = BULLET.test(line);
+        const last = out[out.length - 1];
+        if (last && last.list === list) last.lines.push(line);
+        else out.push({ list, lines: [line] });
+      }
+      return out;
+    });
   return (
-    <div className={cn("space-y-2.5 text-[15px] leading-relaxed", className)}>
-      {blocks.map((block, i) => {
-        const lines = block.split("\n");
-        if (lines.every((l) => /^\s*[-*•]\s+/.test(l))) {
-          return (
-            <ul key={i} className="space-y-1.5">
-              {lines.map((l, j) => (
-                <li key={j} className="flex gap-2.5">
-                  <span className="mt-2.5 size-1 shrink-0 rounded-full bg-primary/70" />
-                  <span>{inline(l.replace(/^\s*[-*•]\s+/, ""), onCite)}</span>
-                </li>
-              ))}
-            </ul>
-          );
-        }
-        return (
+    <div className={cn("space-y-3 text-base leading-relaxed", className)}>
+      {runs.map((run, i) =>
+        run.list ? (
+          <ul key={i} className="space-y-2">
+            {run.lines.map((l, j) => (
+              <Bullet key={j}>{inline(l.replace(BULLET, ""), onCite)}</Bullet>
+            ))}
+          </ul>
+        ) : (
           <p key={i}>
-            {lines.map((l, j) => (
+            {run.lines.map((l, j) => (
               <Fragment key={j}>
                 {j > 0 && <br />}
                 {inline(l, onCite)}
               </Fragment>
             ))}
           </p>
-        );
-      })}
+        ),
+      )}
     </div>
   );
 }
+
+const BULLET = /^\s*[-*•]\s+/;
 
 /** The answer as plain text, for copying and exporting: no key-answer marks, citations kept. */
 export const plainAnswer = (text: string) => text.replace(/==(.+?)==/g, "$1");
@@ -59,7 +69,7 @@ function inline(s: string, onCite?: (pos: Pos) => void): ReactNode[] {
     if (!part) return null;
     if (part.startsWith("==") && part.endsWith("==") && part.length > 4)
       return (
-        <mark key={i} className="rounded-sm bg-[oklch(0.9_0.09_95/0.55)] px-0.5 text-inherit dark:bg-[oklch(0.5_0.08_95/0.45)]">
+        <mark key={i} className="box-decoration-clone rounded-xs bg-key-mark px-0.5 text-inherit">
           {inline(part.slice(2, -2), onCite)}
         </mark>
       );
@@ -76,7 +86,7 @@ function inline(s: string, onCite?: (pos: Pos) => void): ReactNode[] {
           onClick={() => onCite?.(pos)}
           disabled={!onCite}
           title="Go to this passage"
-          className="mx-0.5 inline-flex translate-y-[-1px] items-center rounded-full bg-secondary px-1.5 align-middle text-[11px] font-medium text-secondary-foreground tabular-nums transition-colors hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none"
+          className="mx-0.5 inline-flex h-5 -translate-y-px cursor-pointer items-center rounded-full border border-border px-1.5 align-middle text-xs leading-none font-medium text-muted-foreground tabular-nums transition-colors duration-150 outline-none hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none"
         >
           ¶{cite[2]}
           {cite[3] ? `–${cite[3]}` : ""}

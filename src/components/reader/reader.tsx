@@ -225,6 +225,15 @@ function BookReader() {
     if (meta && lastOpened === undefined) setLastOpened(meta.openedAt); // eslint-disable-line react-hooks/set-state-in-effect -- captured once from the query
   }, [meta, lastOpened]);
 
+  // The browser's toolbar takes the page colour while reading (the library sets its own).
+  useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "theme-color";
+    meta.content = { paper: "#fcfcfa", sepia: "#efe6d4", night: "#221c17" }[prefs.theme];
+    document.head.prepend(meta); // first match wins over the layout's defaults
+    return () => meta.remove();
+  }, [prefs.theme]);
+
   // Chapter names by section, for the reading map: each section takes its first contents entry.
   const chapterLabels = useMemo(() => {
     const out: Record<number, string> = {};
@@ -239,7 +248,7 @@ function BookReader() {
   return (
     <div
       data-reader-theme={prefs.theme}
-      className="reader-surface fixed inset-0 z-10 flex touch-manipulation flex-col overscroll-none bg-background text-foreground transition-colors"
+      className="fixed inset-0 z-10 flex touch-manipulation flex-col overscroll-none bg-background text-foreground transition-colors duration-300"
     >
       <TopBar
         title={meta?.title}
@@ -261,16 +270,24 @@ function BookReader() {
 
         {status !== "ready" && (
           <div className="absolute inset-0 flex items-center justify-center px-6">
-            {status === "loading" && <p className="font-serif text-muted-foreground italic">Opening…</p>}
+            {status === "loading" && (
+              <p role="status" className="text-sm text-muted-foreground">
+                Loading…
+              </p>
+            )}
             {status === "missing" && (
               <p className="text-center text-sm text-muted-foreground">
-                This book isn&apos;t on your shelf anymore.{" "}
-                <Link href="/" className="text-primary underline underline-offset-4">
+                This book is no longer on your shelf.{" "}
+                <Link href="/" className="font-medium text-primary underline underline-offset-4">
                   Back to shelf
                 </Link>
               </p>
             )}
-            {status === "error" && <p className="text-sm text-destructive">Couldn&apos;t open this book.</p>}
+            {status === "error" && (
+              <p role="alert" className="text-sm text-destructive">
+                Couldn&apos;t open this book.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -360,9 +377,12 @@ function EdgeButton({ side, onClick }: { side: "left" | "right"; onClick: () => 
       type="button"
       aria-label={side === "left" ? "Previous page" : "Next page"}
       onClick={onClick}
-      className={cn("group absolute inset-y-0 z-10 flex w-[max(1.25rem,6vw)] items-center justify-center", side === "left" ? "left-0" : "right-0")}
+      className={cn(
+        "group absolute inset-y-0 z-10 flex w-[max(1.25rem,6vw)] cursor-pointer items-center justify-center outline-none",
+        side === "left" ? "left-0" : "right-0",
+      )}
     >
-      <Icon className="size-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-60" />
+      <Icon className="size-5 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-70 group-focus-visible:opacity-100" />
     </button>
   );
 }

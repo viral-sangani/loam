@@ -25,7 +25,7 @@ const MESSAGES: Record<string, string> = {
 };
 
 const input =
-  "h-11 w-full rounded-xl border border-border bg-card px-4 text-base outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/60";
+  "h-11 w-full rounded-lg border border-input bg-card px-3.5 text-base outline-none transition-colors duration-150 placeholder:text-muted-foreground focus:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/20";
 
 export function SignIn() {
   const [mode, setMode] = useState<"in" | "up">("in");
@@ -36,14 +36,14 @@ export function SignIn() {
 
   return (
     <div className="relative z-10 mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-5 py-16">
-      <div className="mb-10 flex items-center gap-2.5">
-        <span className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
+      <div className="mb-10 flex items-center gap-2">
+        <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <Sprout className="size-4" />
         </span>
-        <span className="font-serif text-2xl tracking-tight">Loam</span>
+        <span className="font-serif text-lg leading-7 font-medium">Loam</span>
       </div>
-      <h1 className="font-serif text-3xl">{mode === "in" ? "Welcome back" : "Make a shelf"}</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Your books, audio and notes follow you to any device.</p>
+      <h1 className="font-serif text-2xl leading-8">{mode === "in" ? "Sign in" : "Create an account"}</h1>
+      <p className="mt-2 text-sm text-muted-foreground">Your books, audiobooks and notes, synced across devices.</p>
 
       <form
         className="mt-8 space-y-3"
@@ -59,18 +59,23 @@ export function SignIn() {
           }
         }}
       >
-        <input name="username" autoComplete="username" placeholder="Username" required className={input} />
+        <input name="username" aria-label="Username" autoComplete="username" placeholder="Username" required className={input} />
         <input
           name="password"
           type="password"
           autoComplete={mode === "in" ? "current-password" : "new-password"}
           placeholder="Password"
+          aria-label="Password"
           required
           className={input}
         />
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" disabled={pending} className="h-11 w-full rounded-xl text-base">
-          {pending ? "One moment…" : mode === "in" ? "Sign in" : "Create account"}
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        <Button type="submit" disabled={pending} className="h-11 w-full cursor-pointer rounded-lg text-sm">
+          {pending ? (mode === "in" ? "Signing in…" : "Creating account…") : mode === "in" ? "Sign in" : "Create account"}
         </Button>
       </form>
 
@@ -80,7 +85,7 @@ export function SignIn() {
           setMode(mode === "in" ? "up" : "in");
           setError(null);
         }}
-        className="mt-6 text-sm text-muted-foreground hover:text-foreground"
+        className="mt-6 min-h-11 cursor-pointer self-start text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
       >
         {mode === "in" ? "New here? " : "Have an account? "}
         <span className="text-primary underline underline-offset-4">{mode === "in" ? "Create an account" : "Sign in"}</span>

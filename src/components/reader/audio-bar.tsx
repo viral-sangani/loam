@@ -1,8 +1,7 @@
 "use client";
 
 import { LocateFixed, Pause, Play, RotateCcw, RotateCw, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Btn, IconBtn } from "./kit";
 import { SPEEDS, type Audiobook } from "./use-audiobook";
 
 function clock(ms: number) {
@@ -16,60 +15,65 @@ function clock(ms: number) {
 /** A slim listening bar along the bottom of the page. */
 export function AudioBar({ audio, onClose }: { audio: Audiobook; onClose: () => void }) {
   const note = !audio.available
-    ? "No audiobook yet. Add one from the shelf with the headphones button."
+    ? "No audiobook for this book. Add one from the shelf."
     : audio.status === "error"
-      ? "Couldn't sync this audiobook. You can still listen."
+      ? "Couldn't sync the audio to the text. Playback still works."
       : !audio.synced
         ? audio.status === "aligning"
-          ? `Matching the audio to the text… ${Math.round(audio.progress * 100)}%. You can listen meanwhile.`
-          : "Waiting for the aligner to match the audio to the text. You can listen meanwhile."
+          ? `Syncing audio to text: ${Math.round(audio.progress * 100)}%. Playback works meanwhile.`
+          : "Waiting to sync audio to text. Playback works meanwhile."
         : null;
   const nextRate = SPEEDS[(SPEEDS.indexOf(audio.rate as (typeof SPEEDS)[number]) + 1) % SPEEDS.length];
-  const icon = "text-muted-foreground pointer-coarse:size-11";
 
   return (
-    <footer
-      aria-label="Audiobook"
-      className="absolute inset-x-0 bottom-0 z-20 px-[max(1rem,4vw)] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-    >
-      {note && <p className="mb-1.5 truncate text-center text-[11px] text-muted-foreground">{note}</p>}
-      <div className="mx-auto flex max-w-xl items-center gap-1 rounded-full border border-border bg-card/90 px-2 py-1 shadow-sm backdrop-blur">
-        <Button
-          size="icon"
-          aria-label={audio.playing ? "Pause" : "Play"}
-          disabled={!audio.available}
-          onClick={audio.toggle}
-          className="size-9 rounded-full pointer-coarse:size-11"
-        >
-          {audio.playing ? <Pause className="fill-current" /> : <Play className="ml-0.5 fill-current" />}
-        </Button>
-        <Button variant="ghost" size="icon" aria-label="Back 15 seconds" className={icon} disabled={!audio.available} onClick={() => audio.skip(-15_000)}>
-          <RotateCcw />
-        </Button>
-        <Button variant="ghost" size="icon" aria-label="Forward 30 seconds" className={icon} disabled={!audio.available} onClick={() => audio.skip(30_000)}>
-          <RotateCw />
-        </Button>
-        <span className="min-w-0 flex-1 truncate px-1 text-center font-mono text-[11px] tabular-nums text-muted-foreground">
-          {clock(audio.position)}
-          {audio.total > 0 && <span className="opacity-60"> / {clock(audio.total)}</span>}
-        </span>
-        {audio.synced && !audio.follow && (
-          <Button variant="ghost" size="sm" className="text-primary pointer-coarse:h-11" onClick={audio.resync} title="Go back to the narration">
-            <LocateFixed /> <span className="hidden sm:inline">Follow</span>
-          </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={`Playback speed ${audio.rate}×`}
-          className={cn("w-12 font-mono text-xs tabular-nums text-muted-foreground pointer-coarse:h-11")}
-          onClick={() => audio.setRate(nextRate)}
-        >
-          {audio.rate}×
-        </Button>
-        <Button variant="ghost" size="icon" aria-label="Close player" className={icon} onClick={onClose}>
-          <X />
-        </Button>
+    <footer aria-label="Audiobook" className="absolute inset-x-0 bottom-0 z-20 px-[max(1rem,4vw)] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      {/* The status sits inside the player's own surface, so it never lands on the book's last line as bare text. */}
+      <div className="mx-auto max-w-xl rounded-xl border border-border bg-popover shadow-sm shadow-black/5">
+        {note && <p className="truncate border-b border-border px-3 py-1.5 text-center text-xs leading-4 text-muted-foreground">{note}</p>}
+        <div className="flex items-center gap-1 p-1 pointer-coarse:gap-1.5">
+          <IconBtn
+            tone="primary"
+            label={audio.playing ? "Pause" : "Play"}
+            disabled={!audio.available}
+            onClick={audio.toggle}
+            className="[&_svg]:fill-current"
+          >
+            {audio.playing ? <Pause /> : <Play className="translate-x-px" />}
+          </IconBtn>
+          <IconBtn label="Back 15 seconds" disabled={!audio.available} onClick={() => audio.skip(-15_000)}>
+            <RotateCcw />
+          </IconBtn>
+          <IconBtn label="Forward 30 seconds" disabled={!audio.available} onClick={() => audio.skip(30_000)}>
+            <RotateCw />
+          </IconBtn>
+          <span className="min-w-0 flex-1 truncate px-1 text-center text-xs tabular-nums text-muted-foreground">
+            {clock(audio.position)}
+            {audio.total > 0 && <span> / {clock(audio.total)}</span>}
+          </span>
+          {audio.synced && !audio.follow && (
+            <Btn
+              tone="ghost"
+              size="md"
+              icon={<LocateFixed />}
+              onClick={audio.resync}
+              title="Go back to the narration"
+              className="px-2 sm:pr-3 [&_svg]:size-[18px]"
+            >
+              <span className="hidden sm:inline">Follow</span>
+            </Btn>
+          )}
+          <Btn
+            tone="ghost"
+            aria-label={`Playback speed ${audio.rate}×`}
+            className="w-14 px-0 tabular-nums pointer-coarse:w-14 pointer-coarse:px-0"
+            onClick={() => audio.setRate(nextRate)}
+          >
+            {audio.rate}×
+          </Btn>
+          <IconBtn label="Close player" onClick={onClose}>
+            <X />
+          </IconBtn>
+        </div>
       </div>
     </footer>
   );

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { Id } from "@convex/_generated/dataModel";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Btn, IconBtn, field } from "./kit";
 import { keepKeys } from "./lens";
 import { MARK_COLORS, SWATCH, markColor, type Mark, type MarkColor } from "./use-marks";
 import { Sheet } from "./sheet";
@@ -46,9 +46,9 @@ export function MarkPanel({
 
   return (
     <Sheet title="Highlight" variant="popover" onClose={onClose}>
-      <div className="space-y-4 px-5 pt-1 pb-6 sm:p-4">
-        <blockquote className="line-clamp-6 font-serif text-[15px] leading-relaxed">
-          <span className="box-decoration-clone px-0.5" style={{ background: `color-mix(in oklch, ${SWATCH[color]} 38%, transparent)` }}>
+      <div className="space-y-4 px-5 pt-1 pb-6 sm:p-5">
+        <blockquote className="line-clamp-6 font-book text-base leading-relaxed">
+          <span className="box-decoration-clone px-0.5" style={{ background: `color-mix(in oklch, ${SWATCH[color]} 40%, transparent)` }}>
             {mark.quote}
           </span>
         </blockquote>
@@ -59,12 +59,12 @@ export function MarkPanel({
           onKeyDown={(e) => keepKeys(e, () => (e.target as HTMLTextAreaElement).blur())}
           rows={3}
           maxLength={4000}
-          placeholder="Add a note…"
+          placeholder="Add a note"
           aria-label="Note"
-          className="w-full resize-none rounded-xl bg-secondary/70 px-3 py-2 text-sm leading-relaxed outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 pointer-coarse:text-base"
+          className={cn(field, "block resize-none py-2 leading-5")}
         />
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center" role="radiogroup" aria-label="Colour">
+          <div className="-ml-1.5 flex items-center gap-1 pointer-coarse:gap-2" role="radiogroup" aria-label="Colour">
             {MARK_COLORS.map((c) => (
               <button
                 key={c}
@@ -72,22 +72,20 @@ export function MarkPanel({
                 role="radio"
                 aria-checked={c === color}
                 aria-label={c}
+                title={c[0].toUpperCase() + c.slice(1)}
                 onClick={() => c !== color && onUpdate(mark._id, { color: c })}
-                className="grid size-8 place-items-center rounded-xl transition-colors hover:bg-muted pointer-coarse:size-11"
+                className="grid size-9 cursor-pointer place-items-center rounded-lg transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60 pointer-coarse:size-11"
               >
                 <span
-                  className={cn("size-4 rounded-full ring-1 ring-foreground/15", c === color && "ring-2 ring-foreground/60 ring-offset-2 ring-offset-card")}
+                  className={cn("size-5 rounded-full ring-1 ring-black/10", c === color && "ring-2 ring-foreground ring-offset-2 ring-offset-card")}
                   style={{ background: SWATCH[c] }}
                 />
               </button>
             ))}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Delete highlight"
-            title="Delete"
-            className="text-muted-foreground hover:text-destructive pointer-coarse:size-11"
+          <IconBtn
+            label="Delete highlight"
+            className="-mr-1.5 hover:text-destructive"
             onClick={() => {
               latest.current.saved = note; // nothing left to save
               onRemove(mark._id);
@@ -95,11 +93,11 @@ export function MarkPanel({
             }}
           >
             <Trash2 />
-          </Button>
+          </IconBtn>
         </div>
-        <Button variant="secondary" className="w-full pointer-coarse:h-11" onClick={onExplain}>
-          <Sparkles /> Explain this
-        </Button>
+        <Btn className="w-full" onClick={onExplain}>
+          Explain this passage
+        </Btn>
       </div>
     </Sheet>
   );

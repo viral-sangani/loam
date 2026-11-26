@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { READER_THEMES } from "@/lib/library";
 import { FONT_STEPS, step, type Panel } from "./config";
 import type { EpubReader } from "./use-epub-reader";
 
@@ -45,7 +46,7 @@ export function useReaderKeys(
         "=": bigger,
         "+": bigger,
         "-": () => updatePrefs({ fontSize: step(FONT_STEPS, p.fontSize, -1) }),
-        n: () => updatePrefs({ theme: p.theme === "light" ? "dark" : "light" }),
+        n: () => updatePrefs({ theme: READER_THEMES[(READER_THEMES.indexOf(p.theme) + 1) % READER_THEMES.length] }),
         "?": () => togglePanel("keys"),
         ...extra,
       };

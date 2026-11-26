@@ -1,22 +1,26 @@
 import type { NavItem } from "epubjs";
+import type { ReaderTheme } from "@/lib/library";
 
-export const INK = { light: "#3a2e24", dark: "#e6dccb" } as const;
+/** The book's text colour on each page. */
+export const INK: Record<ReaderTheme, string> = { paper: "#1c1c1c", sepia: "#3a2e24", night: "#e2d9c9" };
+export const THEME_NAMES: Record<ReaderTheme, string> = { paper: "Paper", sepia: "Sepia", night: "Night" };
 export const FONT_STEPS = [85, 95, 105, 115, 125, 140, 160];
 export const LINE_STEPS = [1.4, 1.55, 1.65, 1.8, 2];
 export const IDLE_MS = 2200;
 
 export const SHORTCUTS: [string, string][] = [
-  ["← →  or  Space ⇧Space", "Previous / next page"],
+  ["←  →", "Previous / next page"],
+  ["Space  ⇧Space", "Next / previous page"],
   ["[  ]", "Previous / next chapter"],
   ["C", "Contents"],
   ["M", "Notebook"],
-  ["Q", "Ask about the book so far"],
-  ["R", "The story so far"],
+  ["Q", "Ask about the book"],
+  ["R", "Story so far"],
   ["P", "Show / hide progress"],
   ["−  =", "Smaller / larger text"],
-  ["N", "Parchment / night"],
-  ["A", "Show / hide the audiobook"],
-  ["K", "Play / pause the audiobook"],
+  ["N", "Next theme: paper, sepia, night"],
+  ["A", "Show / hide audiobook"],
+  ["K", "Play / pause audiobook"],
   ["Esc", "Close panel"],
   ["?", "Shortcuts"],
 ];

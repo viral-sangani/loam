@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowUp, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowUp, Trash2 } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { Anchor, Pos } from "@/lib/anchors";
+import { cn } from "@/lib/utils";
 import { Answer } from "./answer";
+import { IconBtn, field } from "./kit";
 import { keepKeys, type AskKind } from "./lens";
-import { Sheet } from "./sheet";
+import { Failed, Loading, Quote, Sheet, SheetBody, SheetFooter } from "./sheet";
 
 /** A stretch of the book being asked about. */
 export type Passage = { anchor: Anchor; quote: string };
@@ -20,7 +22,7 @@ const QUESTION: Record<Exclude<AskKind, "ask">, string> = {
   simplify: "Can you say it more simply?",
 };
 
-const TITLE: Record<AskKind, string> = { explain: "Explain", define: "Define", simplify: "In plain words", ask: "Ask" };
+const TITLE: Record<AskKind, string> = { explain: "Explain", define: "Define", simplify: "Simplify", ask: "Question" };
 
 type Entry = { key: number; kind: AskKind; question: string; id: Id<"asks"> | null; failed: boolean };
 type Thread = { passage: Passage; entries: Entry[] };
@@ -101,10 +103,8 @@ export function AskPanel({ asks, onCite, onClose }: { asks: AskThread; onCite: (
 
   return (
     <Sheet title={first ? TITLE[first.kind] : "About this passage"} variant="side" onClose={onClose}>
-      <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 pb-6">
-        <blockquote className="line-clamp-6 border-l-2 border-primary/40 pl-3 font-serif text-[15px] leading-relaxed text-foreground/80">
-          {thread.passage.quote}
-        </blockquote>
+      <SheetBody className="space-y-6">
+        <Quote text={thread.passage.quote} className="line-clamp-6" />
         {thread.entries.map((e) => (
           <AskEntry
             key={e.key}
@@ -118,34 +118,31 @@ export function AskPanel({ asks, onCite, onClose }: { asks: AskThread; onCite: (
           />
         ))}
         <div ref={endRef} />
-      </div>
-      <form
-        className="flex shrink-0 items-center gap-2 border-t border-border px-4 py-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!draft.trim()) return;
-          asks.followUp(draft);
-          setDraft("");
-        }}
-      >
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => keepKeys(e, onClose)}
-          maxLength={1000}
-          placeholder="Ask a follow-up about this passage"
-          aria-label="Follow-up question"
-          className="h-9 min-w-0 flex-1 rounded-xl bg-secondary/70 px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 pointer-coarse:h-11 pointer-coarse:text-base"
-        />
-        <button
-          type="submit"
-          aria-label="Ask"
-          disabled={!draft.trim()}
-          className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition-opacity disabled:opacity-40 pointer-coarse:size-11 [&_svg]:size-4"
+      </SheetBody>
+      <SheetFooter>
+        <form
+          className="flex w-full items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!draft.trim()) return;
+            asks.followUp(draft);
+            setDraft("");
+          }}
         >
-          <ArrowUp />
-        </button>
-      </form>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => keepKeys(e, onClose)}
+            maxLength={1000}
+            placeholder="Ask a follow-up"
+            aria-label="Follow-up question"
+            className={cn(field, "h-9 min-w-0 flex-1 pointer-coarse:h-11")}
+          />
+          <IconBtn type="submit" tone="primary" label="Ask" disabled={!draft.trim()}>
+            <ArrowUp />
+          </IconBtn>
+        </form>
+      </SheetFooter>
     </Sheet>
   );
 }
@@ -157,42 +154,30 @@ function AskEntry({ entry, onCite, onResend, onDelete }: { entry: Entry; onCite:
   const failed = entry.failed || ask?.status === "error";
 
   return (
-    <section className="group space-y-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground/90">{ask?.question ?? entry.question}</p>
-        <button
-          type="button"
-          aria-label="Delete this answer"
-          title="Delete"
+    <section className="space-y-2 border-t border-border pt-5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 pt-1 text-base leading-6 font-medium pointer-coarse:pt-2.5">{ask?.question ?? entry.question}</p>
+        <IconBtn
+          size="sm"
+          label="Delete answer"
+          className="-mr-2"
           onClick={() => {
             if (entry.id) void remove({ askId: entry.id }).catch(() => {});
             onDelete();
           }}
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground pointer-coarse:size-11 [&_svg]:size-3.5"
         >
           <Trash2 />
-        </button>
+        </IconBtn>
       </div>
       {failed ? (
-        <div className="space-y-2 text-sm">
-          <p className="text-destructive">{ask?.error ?? "Couldn't send the question."}</p>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline [&_svg]:size-3.5"
-            onClick={() => (entry.id ? void retry({ askId: entry.id }).catch(() => {}) : onResend())}
-          >
-            <RotateCcw /> Try again
-          </button>
-        </div>
+        <Failed
+          message={ask?.error ?? "Couldn't send the question."}
+          onRetry={() => (entry.id ? void retry({ askId: entry.id }).catch(() => {}) : onResend())}
+        />
       ) : ask?.status === "ready" && ask.answer ? (
         <Answer text={ask.answer} onCite={onCite} />
       ) : (
-        <div className="space-y-2.5" aria-busy="true">
-          <p className="font-serif text-sm text-muted-foreground italic">Thinking it over…</p>
-          <div className="h-3 w-full animate-pulse rounded bg-muted" />
-          <div className="h-3 w-11/12 animate-pulse rounded bg-muted" />
-          <div className="h-3 w-3/5 animate-pulse rounded bg-muted" />
-        </div>
+        <Loading label="Answering…" />
       )}
     </section>
   );

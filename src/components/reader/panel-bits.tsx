@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { Pos } from "@/lib/anchors";
 import { cn } from "@/lib/utils";
+import { Segmented } from "./kit";
 
 /**
  * Jumping to a passage from a panel. On phones the panel is a bottom sheet over the text,
@@ -35,53 +36,30 @@ export function DeleteButton({ label, onDelete }: { label: string; onDelete: () 
       onClick={() => (armed ? onDelete() : setArmed(true))}
       onBlur={() => setArmed(false)}
       className={cn(
-        "inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs transition-colors pointer-coarse:h-11 pointer-coarse:px-3",
-        armed ? "bg-destructive/10 text-destructive" : "text-muted-foreground/70 hover:bg-muted hover:text-foreground",
+        "inline-flex h-8 min-w-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg text-sm transition-colors duration-150 pointer-coarse:h-11 pointer-coarse:min-w-11",
+        "outline-none focus-visible:ring-2 focus-visible:ring-ring/60 [&_svg]:size-4",
+        armed ? "bg-destructive/10 px-2.5 font-medium text-destructive" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
-      <Trash2 className="size-3.5" />
+      <Trash2 />
       {armed && "Delete"}
     </button>
   );
 }
 
-/** Small uppercase label, used for kinds of entries and chapter groups. */
-export function Label({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <p className={cn("text-[11px] font-medium tracking-wide text-muted-foreground uppercase", className)}>{children}</p>;
-}
-
-/** Placeholder lines while the AI writes. */
-export function Pending({ note, lines = 3 }: { note: string; lines?: number }) {
-  return (
-    <div className="space-y-2.5" aria-busy="true">
-      <p className="font-serif text-sm text-muted-foreground italic">{note}</p>
-      {Array.from({ length: lines }, (_, i) => (
-        <div key={i} className="h-3 animate-pulse rounded bg-muted" style={{ width: `${[92, 78, 60, 85][i % 4]}%` }} />
-      ))}
-    </div>
-  );
-}
-
 /** Switch between asking the book and the story so far: two views of the same companion. */
 export function CompanionTabs({ current, onSwitch }: { current: "ask" | "recap"; onSwitch: (p: "ask" | "recap") => void }) {
-  const tab = (p: "ask" | "recap", text: string) => (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={current === p}
-      onClick={() => current !== p && onSwitch(p)}
-      className={cn(
-        "flex-1 rounded-full px-3 py-1.5 text-sm transition-colors pointer-coarse:py-2.5",
-        current === p ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {text}
-    </button>
-  );
   return (
-    <div role="tablist" className="mx-5 mb-3 flex gap-1 rounded-full bg-secondary p-1">
-      {tab("ask", "Ask")}
-      {tab("recap", "Story so far")}
-    </div>
+    <Segmented
+      tabs
+      label="Companion"
+      className="mx-5 mb-4 shrink-0"
+      options={[
+        ["ask", "Ask"],
+        ["recap", "Story so far"],
+      ]}
+      value={current}
+      onChange={onSwitch}
+    />
   );
 }

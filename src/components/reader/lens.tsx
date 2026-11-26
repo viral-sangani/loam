@@ -1,8 +1,9 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowUp, BookA, Feather, MessageCircleQuestionMark, PenLine, Sparkles } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { ArrowUp, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { IconBtn } from "./kit";
 import { MARK_COLORS, SWATCH, type MarkColor } from "./use-marks";
 import type { Picked } from "./use-selection";
 
@@ -91,33 +92,30 @@ export function Lens({
       role="toolbar"
       aria-label="Selection"
       style={{ visibility: "hidden" }}
-      className="fixed z-30 max-w-[calc(100vw-1rem)] rounded-2xl border border-border bg-popover/95 p-1 text-popover-foreground shadow-lg shadow-foreground/10 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-150"
+      className="fixed z-30 max-w-[calc(100vw-1rem)] animate-in rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg shadow-black/8 duration-150 fade-in zoom-in-95"
     >
       {mode === "actions" ? (
-        <div className="flex flex-wrap items-center justify-center gap-0.5">
-          <div className="flex items-center" role="group" aria-label="Highlight">
+        <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 pointer-coarse:gap-x-2">
+          <div className="flex items-center gap-1 pointer-coarse:gap-2" role="group" aria-label="Highlight">
             {MARK_COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
                 aria-label={`Highlight ${c}`}
-                title={c === "yellow" ? "Highlight" : `Highlight ${c}`}
+                title={`Highlight ${c}`}
                 onClick={() => onHighlight(c)}
-                className="grid size-8 place-items-center rounded-xl transition-colors hover:bg-muted pointer-coarse:size-11"
+                className="grid size-9 cursor-pointer place-items-center rounded-lg transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60 pointer-coarse:size-11"
               >
-                <span className="size-3.5 rounded-full ring-1 ring-foreground/15" style={{ background: SWATCH[c] }} />
+                <span className="size-4 rounded-full ring-1 ring-black/10" style={{ background: SWATCH[c] }} />
               </button>
             ))}
           </div>
-          <div className="flex items-center">
-            <Action icon={<PenLine />} label="Note" onClick={() => typeInto("note")} />
-            <Action icon={<Sparkles />} label="Explain" onClick={() => onAsk("explain")} />
-            {short ? (
-              <Action icon={<BookA />} label="Define" onClick={() => onAsk("define")} />
-            ) : (
-              <Action icon={<Feather />} label="Simplify" onClick={() => onAsk("simplify")} />
-            )}
-            <Action icon={<MessageCircleQuestionMark />} label="Ask" onClick={() => typeInto("ask")} />
+          <span aria-hidden className="mx-1 h-5 w-px bg-border max-[400px]:hidden" />
+          <div className="flex items-center gap-1 pointer-coarse:gap-2">
+            <Action label="Note" onClick={() => typeInto("note")} />
+            <Action label="Explain" onClick={() => onAsk("explain")} />
+            {short ? <Action label="Define" onClick={() => onAsk("define")} /> : <Action label="Simplify" onClick={() => onAsk("simplify")} />}
+            <Action label="Ask" onClick={() => typeInto("ask")} />
           </div>
         </div>
       ) : (
@@ -134,35 +132,29 @@ export function Lens({
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => keepKeys(e, onClose)}
             maxLength={mode === "ask" ? 1000 : 4000}
-            placeholder={mode === "note" ? "Add a note…" : "Ask about this passage…"}
+            placeholder={mode === "note" ? "Add a note" : "Ask about this passage"}
             aria-label={mode === "note" ? "Note" : "Question"}
-            className="h-8 min-w-0 flex-1 bg-transparent px-2.5 text-[14px] outline-none placeholder:text-muted-foreground pointer-coarse:h-11 pointer-coarse:text-base"
+            className="h-9 min-w-0 flex-1 bg-transparent px-2.5 text-sm outline-none placeholder:text-muted-foreground pointer-coarse:h-11 pointer-coarse:text-base"
           />
-          <button
-            type="submit"
-            aria-label={mode === "note" ? "Save note" : "Ask"}
-            disabled={!text.trim()}
-            className="grid size-8 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition-opacity disabled:opacity-40 pointer-coarse:size-11 [&_svg]:size-4"
-          >
-            {mode === "note" ? <PenLine /> : <ArrowUp />}
-          </button>
+          <IconBtn type="submit" tone="primary" label={mode === "note" ? "Save note" : "Ask"} disabled={!text.trim()}>
+            {mode === "note" ? <Check /> : <ArrowUp />}
+          </IconBtn>
         </form>
       )}
     </div>
   );
 }
 
-function Action({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+function Action({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-[13px] text-foreground/85 transition-colors hover:bg-muted hover:text-foreground",
-        "pointer-coarse:h-11 pointer-coarse:px-3 [&_svg]:size-3.5 [&_svg]:text-muted-foreground",
+        "inline-flex h-9 cursor-pointer items-center rounded-lg px-3 text-sm font-medium transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60",
+        "pointer-coarse:h-11",
       )}
     >
-      {icon}
       {label}
     </button>
   );

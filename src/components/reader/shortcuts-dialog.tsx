@@ -1,23 +1,28 @@
 "use client";
 
 import { SHORTCUTS } from "./config";
+import { SheetHeader } from "./sheet";
 
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-foreground/10 p-4" onClick={onClose}>
+    <div className="absolute inset-0 z-40 flex animate-in items-center justify-center bg-scrim p-4 duration-200 fade-in" onClick={onClose}>
       <div
         role="dialog"
-        aria-label="Shortcuts"
-        className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
+        aria-label="Keyboard shortcuts"
+        className="flex max-h-[85dvh] w-full max-w-md flex-col rounded-xl border border-border bg-popover text-popover-foreground shadow-lg shadow-black/8"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 font-serif text-lg">Shortcuts</h2>
-        <dl className="space-y-2.5 text-sm">
+        <SheetHeader title="Keyboard shortcuts" onClose={onClose} />
+        <dl className="overflow-y-auto px-5 pb-5">
           {SHORTCUTS.map(([k, d]) => (
-            <div key={k} className="flex items-center justify-between gap-6">
-              <dt className="text-muted-foreground">{d}</dt>
-              <dd>
-                <kbd className="rounded-md border border-border bg-secondary px-2 py-0.5 font-mono text-xs whitespace-pre">{k}</kbd>
+            <div key={k} className="flex min-h-9 items-center justify-between gap-6 border-t border-border py-1.5 text-sm first:border-t-0">
+              <dt>{d}</dt>
+              <dd className="flex shrink-0 gap-1">
+                {k.split(/\s{2,}/).map((key) => (
+                  <kbd key={key} className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-border px-1.5 font-mono text-xs text-muted-foreground">
+                    {key}
+                  </kbd>
+                ))}
               </dd>
             </div>
           ))}

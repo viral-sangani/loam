@@ -28,6 +28,9 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-clay: var(--clay);
+  --color-scrim: var(--scrim);
+  --color-key-mark: var(--key-mark);
+  --font-book: var(--book-face);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -84,50 +87,84 @@
   }
 }
 
-/* Reader picks its own theme regardless of system setting */
-[data-reader-theme="light"] {
-  --background: oklch(0.955 0.018 82);   /* parchment */
-  --foreground: oklch(0.27 0.03 55);     /* dark soil */
-  --card: oklch(0.975 0.014 85);
-  --card-foreground: oklch(0.27 0.03 55);
-  --popover: oklch(0.975 0.014 85);
-  --popover-foreground: oklch(0.27 0.03 55);
-  --primary: oklch(0.47 0.07 135);       /* moss */
-  --primary-foreground: oklch(0.97 0.015 85);
-  --secondary: oklch(0.915 0.025 80);    /* sand */
-  --secondary-foreground: oklch(0.32 0.035 55);
-  --muted: oklch(0.91 0.022 80);
-  --muted-foreground: oklch(0.5 0.03 60);
-  --accent: oklch(0.9 0.03 78);
-  --accent-foreground: oklch(0.3 0.035 55);
-  --clay: oklch(0.6 0.115 45);           /* terracotta */
-  --destructive: oklch(0.55 0.17 30);
-  --border: oklch(0.86 0.025 75);
-  --input: oklch(0.86 0.025 75);
-  --ring: oklch(0.47 0.07 135);
-  --radius: 0.75rem;
+/* The reader picks its own theme regardless of the system setting.
+   Paper (default) is a plain e-ink page: near-white, near-black ink, grey chrome, one quiet accent.
+   Sepia is the parchment look; Night is the dark one. */
+[data-reader-theme] {
+  --book-face: "Literata", Georgia, serif;
+  --radius: 0.5rem;
 }
 
-[data-reader-theme="dark"] {
-    --background: oklch(0.2 0.015 60);   /* night soil */
-    --foreground: oklch(0.92 0.02 80);
-    --card: oklch(0.24 0.018 60);
-    --card-foreground: oklch(0.92 0.02 80);
-    --popover: oklch(0.24 0.018 60);
-    --popover-foreground: oklch(0.92 0.02 80);
-    --primary: oklch(0.72 0.08 135);
-    --primary-foreground: oklch(0.2 0.02 60);
-    --secondary: oklch(0.29 0.02 60);
-    --secondary-foreground: oklch(0.9 0.02 80);
-    --muted: oklch(0.29 0.02 60);
-    --muted-foreground: oklch(0.68 0.025 70);
-    --accent: oklch(0.31 0.022 60);
-    --accent-foreground: oklch(0.92 0.02 80);
-    --clay: oklch(0.7 0.11 45);
-    --destructive: oklch(0.68 0.16 30);
-    --border: oklch(0.34 0.02 60);
-    --input: oklch(0.34 0.02 60);
-    --ring: oklch(0.72 0.08 135);
+[data-reader-theme="paper"] {
+  --background: #fcfcfa;
+  --foreground: #1c1c1c;
+  --card: #fcfcfa;
+  --card-foreground: #1c1c1c;
+  --popover: #ffffff;
+  --popover-foreground: #1c1c1c;
+  --primary: oklch(0.42 0.05 140);        /* a dark, quiet moss: active states and links only */
+  --primary-foreground: #ffffff;
+  --secondary: #f1f1ef;
+  --secondary-foreground: #1c1c1c;
+  --muted: #f1f1ef;
+  --muted-foreground: #5c5c5a;           /* 6.6:1 on the page */
+  --accent: #ececea;
+  --accent-foreground: #1c1c1c;
+  --clay: oklch(0.5 0.08 50);
+  --destructive: #b3261e;
+  --border: #e3e3e0;
+  --input: #d6d6d3;
+  --ring: #1c1c1c;
+  --scrim: rgb(0 0 0 / 0.16);
+  --key-mark: rgb(96 132 80 / 0.14);
+}
+
+[data-reader-theme="sepia"] {
+  --background: oklch(0.955 0.018 82);   /* parchment */
+  --foreground: oklch(0.27 0.03 55);     /* dark soil */
+  --card: oklch(0.955 0.018 82);
+  --card-foreground: oklch(0.27 0.03 55);
+  --popover: oklch(0.97 0.014 85);
+  --popover-foreground: oklch(0.27 0.03 55);
+  --primary: oklch(0.45 0.07 135);       /* moss */
+  --primary-foreground: oklch(0.97 0.015 85);
+  --secondary: oklch(0.925 0.022 80);
+  --secondary-foreground: oklch(0.3 0.035 55);
+  --muted: oklch(0.925 0.022 80);
+  --muted-foreground: oklch(0.47 0.03 60);
+  --accent: oklch(0.91 0.026 78);
+  --accent-foreground: oklch(0.3 0.035 55);
+  --clay: oklch(0.55 0.11 45);           /* terracotta */
+  --destructive: oklch(0.52 0.17 30);
+  --border: oklch(0.88 0.022 75);
+  --input: oklch(0.84 0.025 75);
+  --ring: oklch(0.45 0.07 135);
+  --scrim: rgb(40 28 16 / 0.18);
+  --key-mark: oklch(0.88 0.08 100 / 0.5);
+}
+
+[data-reader-theme="night"] {
+  --background: oklch(0.2 0.012 60);     /* night soil */
+  --foreground: oklch(0.9 0.018 80);
+  --card: oklch(0.2 0.012 60);
+  --card-foreground: oklch(0.9 0.018 80);
+  --popover: oklch(0.24 0.014 60);
+  --popover-foreground: oklch(0.9 0.018 80);
+  --primary: oklch(0.76 0.07 135);
+  --primary-foreground: oklch(0.2 0.02 60);
+  --secondary: oklch(0.26 0.014 60);
+  --secondary-foreground: oklch(0.9 0.018 80);
+  --muted: oklch(0.26 0.014 60);
+  --muted-foreground: oklch(0.7 0.02 70);
+  --accent: oklch(0.29 0.016 60);
+  --accent-foreground: oklch(0.92 0.02 80);
+  --clay: oklch(0.72 0.1 45);
+  --destructive: oklch(0.72 0.15 30);
+  --border: oklch(0.31 0.014 60);
+  --input: oklch(0.36 0.016 60);
+  --ring: oklch(0.76 0.07 135);
+  --scrim: rgb(0 0 0 / 0.4);
+  --key-mark: oklch(0.5 0.06 130 / 0.35);
 }
 
 @layer base {
@@ -142,6 +179,20 @@
   }
 }
 
+/* Literata, the book's face, for quotes from the book shown outside it (the frame loads its own copy) */
+@font-face { font-family: "Literata"; font-style: normal; font-display: swap; font-weight: 200 900;
+  src: url(/fonts/literata-latin-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Literata"; font-style: italic; font-display: swap; font-weight: 200 900;
+  src: url(/fonts/literata-latin-wght-italic.woff2) format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Literata"; font-style: normal; font-display: swap; font-weight: 200 900;
+  src: url(/fonts/literata-latin-ext-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Literata"; font-style: italic; font-display: swap; font-weight: 200 900;
+  src: url(/fonts/literata-latin-ext-wght-italic.woff2) format("woff2-variations");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+
 /* subtle paper grain */
 body::before {
   content: "";
@@ -151,4 +202,30 @@ body::before {
   z-index: 0;
   opacity: 0.035;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* The reader is a plain page: no grain behind it (it shows through iOS overscroll otherwise). */
+body:has([data-reader-theme])::before {
+  display: none;
+}
+/* Dark scrollbars and form controls in Night's panels. Not on the whole reader: an iframe whose
+   colour scheme differs from its parent's gets an opaque white backdrop, and the book is an iframe. */
+[data-reader-theme="night"] [role="dialog"],
+[data-reader-theme="night"] [role="toolbar"] {
+  color-scheme: dark;
+}
+
+body:has([data-reader-theme="paper"]) { background: #fcfcfa; }
+body:has([data-reader-theme="sepia"]) { background: oklch(0.955 0.018 82); }
+body:has([data-reader-theme="night"]) { background: oklch(0.2 0.012 60); }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reader-theme] *,
+  [data-reader-theme] *::before,
+  [data-reader-theme] *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }
