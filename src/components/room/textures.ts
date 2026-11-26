@@ -460,7 +460,7 @@ export function drawBack(b: ShelfBook, cover: CoverImage | null) {
   } else {
     g.fillStyle = INK2;
     font(g, 400, 32, true);
-    g.fillText("No description came with this book.", px + 54, py + 170);
+    g.fillText("No description.", px + 54, py + 170);
   }
   if (b.author) {
     font(g, 400, 28, true);

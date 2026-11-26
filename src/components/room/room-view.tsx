@@ -394,7 +394,7 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
           <section aria-label="Book in hand">
             <h2>{held.title}</h2>
             {held.author && <p>{held.author}</p>}
-            <p>{held.description ?? "No description came with this book."}</p>
+            <p>{held.description ?? "No description."}</p>
             <p>Reading: {progressLabel(held)}</p>
             <ul>
               {bookFacts(held).map((f) => (

@@ -374,7 +374,6 @@ function BookDetail({
       <div className={cn("flex gap-12", phone ? "flex-col items-center gap-6" : "items-start")}>
         <div className={cn("shrink-0", phone ? "w-44" : "w-[280px]")}>
           <Cover book={book} className="aspect-[2/3] w-full shadow-[0_30px_60px_rgba(0,0,0,0.6)]" />
-          {!book.coverUrl && !phone && <p className="mt-3 text-sm text-[var(--lib-muted)]">No cover in the EPUB, so Loam bound it in cloth.</p>}
         </div>
 
         <div className={cn("min-w-0 flex-1", phone && "w-full")}>
@@ -412,7 +411,7 @@ function BookDetail({
           {book.description ? (
             <p className={cn("mt-6 max-w-[62ch] leading-relaxed text-[var(--lib-ink-soft)]", phone ? "text-base" : "text-lg")}>{book.description}</p>
           ) : (
-            <p className="mt-6 text-base text-[var(--lib-muted)] italic">No description came with this book.</p>
+            <p className="mt-6 text-base text-[var(--lib-muted)] italic">No description.</p>
           )}
 
           <h2 className="sc-wide mt-8 mb-3 text-sm font-semibold text-[var(--lib-brass)]">What&apos;s here</h2>

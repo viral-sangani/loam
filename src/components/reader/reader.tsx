@@ -72,7 +72,8 @@ function BookReader() {
 
   const [panel, setPanel] = useState<Panel | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
-  const [listening, setListening] = useState(false);
+  // `?listen=1` (the library's Listen button) opens with the audiobook bar showing.
+  const [listening, setListening] = useState(() => params.get("listen") === "1");
   const [chrome, setChrome] = useState(true);
   const panelOpen = useRef(false);
   useEffect(() => {
@@ -131,11 +132,12 @@ function BookReader() {
 
   // A spot in the URL opens the book there; a later link while the book is open jumps. Either way the
   // query is dropped, so reloading resumes where the reader is rather than at the link.
+  const hasQuery = spot !== null || params.has("listen");
   useEffect(() => {
-    if (status !== "ready" || !spot) return;
-    if (spot !== openAt) jump(spot);
+    if (status !== "ready" || !hasQuery) return;
+    if (spot && spot !== openAt) jump(spot);
     window.history.replaceState(null, "", window.location.pathname);
-  }, [status, spot, openAt, jump]);
+  }, [status, hasQuery, spot, openAt, jump]);
 
   // ---- controls fade away while reading ---------------------------------
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
