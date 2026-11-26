@@ -64,10 +64,23 @@ async function ensureModel() {
   await rename(`${MODEL}.part`, MODEL);
 }
 
-const durationMs = async (file) =>
-  Math.round(
-    Number(await run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file])) * 1000,
+/**
+ * Uploaded files are untrusted: anyone with an account can upload "audio". Playlist-style formats
+ * (HLS, concat, etc.) could make ffmpeg read local files or fetch URLs, so each file is probed with
+ * local-file access only, must be a plain audio container, and is then decoded with that demuxer forced.
+ */
+const AUDIO_DEMUXERS = new Set(["mp3", "mov", "mp4", "m4a", "ogg", "wav", "flac", "aac", "matroska", "webm"]);
+const SAFE = ["-protocol_whitelist", "file"];
+
+async function probe(file) {
+  const out = JSON.parse(
+    await run("ffprobe", ["-v", "error", ...SAFE, "-show_entries", "format=format_name,duration", "-of", "json", file]),
   );
+  const names = String(out.format?.format_name ?? "").split(",");
+  const demuxer = names.find((n) => AUDIO_DEMUXERS.has(n));
+  if (!demuxer) throw new Error(`Not a supported audio file (${names.join(",") || "unknown format"})`);
+  return { demuxer, durationMs: Math.round(Number(out.format.duration) * 1000) };
+}
 
 async function processBook(bookId, title) {
   const update = (patch) => client.mutation(api.worker.update, { secret, bookId, ...patch });
@@ -84,12 +97,13 @@ async function processBook(bookId, title) {
       await download(f.url, to);
       inputs.push(to);
     }
-    const durationsMs = await Promise.all(inputs.map(durationMs));
+    const probes = await Promise.all(inputs.map(probe));
+    const durationsMs = probes.map((p) => p.durationMs);
 
     // One 16 kHz mono WAV for the whole book, which is what whisper wants.
     await update({ progress: 0.04, stage: "Preparing audio" });
     const wav = path.join(dir, "book.wav");
-    const ins = inputs.flatMap((f) => ["-i", f]);
+    const ins = inputs.flatMap((f, i) => [...SAFE, "-f", probes[i].demuxer, "-i", f]);
     const filter = inputs.length > 1 ? ["-filter_complex", `${inputs.map((_, i) => `[${i}:a]`).join("")}concat=n=${inputs.length}:v=0:a=1`] : [];
     await run("ffmpeg", ["-y", "-v", "error", ...ins, ...filter, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav]);
 

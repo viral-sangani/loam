@@ -27,6 +27,47 @@ export const generateUploadUrl = mutation({
   },
 });
 
+/** Records that the signed-in user uploaded this file. Called right after each upload. */
+export const registerUpload = mutation({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, { storageId }) => {
+    const userId = await requireUser(ctx);
+    if (!(await ctx.db.system.get(storageId))) throw new ConvexError("File not found");
+    const existing = await ctx.db
+      .query("uploads")
+      .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+      .unique();
+    if (existing) {
+      if (existing.userId !== userId) throw new ConvexError("File not found");
+      return;
+    }
+    await ctx.db.insert("uploads", { storageId, userId });
+  },
+});
+
+/** Links an uploaded file to a book. Only the uploader can, and only to one book. */
+async function claimFile(ctx: MutationCtx, userId: Id<"users">, storageId: Id<"_storage">, bookId: Id<"books">) {
+  const upload = await ctx.db
+    .query("uploads")
+    .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+    .unique();
+  if (!upload || upload.userId !== userId || (upload.bookId && upload.bookId !== bookId)) {
+    throw new ConvexError("File not found");
+  }
+  await ctx.db.patch(upload._id, { bookId });
+}
+
+/** Deletes a stored file, but only if the given user uploaded it. */
+async function deleteOwnFile(ctx: MutationCtx, userId: Id<"users">, storageId: Id<"_storage">) {
+  const upload = await ctx.db
+    .query("uploads")
+    .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+    .unique();
+  if (!upload || upload.userId !== userId) return;
+  await ctx.db.delete(upload._id);
+  await ctx.storage.delete(storageId).catch(() => {});
+}
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -82,12 +123,15 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
-    return ctx.db.insert("books", {
+    const bookId = await ctx.db.insert("books", {
       ...args,
       userId,
       addedAt: Date.now(),
       terms: { status: "waiting", done: 0, total: 0 },
     });
+    await claimFile(ctx, userId, args.epub, bookId);
+    if (args.cover) await claimFile(ctx, userId, args.cover, bookId);
+    return bookId;
   },
 });
 
@@ -116,7 +160,7 @@ export const remove = mutation({
   handler: async (ctx, { bookId }) => {
     const book = await ownBook(ctx, bookId);
     const files = [book.epub, book.cover, ...(book.audio?.files.map((f) => f.storageId) ?? [])];
-    for (const f of files) if (f) await ctx.storage.delete(f).catch(() => {});
+    for (const f of files) if (f) await deleteOwnFile(ctx, book.userId, f);
     for (const table of ["sections", "timings", "terms", "briefs"] as const) {
       const rows = await ctx.db
         .query(table)
@@ -143,7 +187,9 @@ export const attachAudio = mutation({
   args: { bookId: v.id("books"), files: v.array(vAudioFile) },
   handler: async (ctx, { bookId, files }) => {
     const book = await ownBook(ctx, bookId);
-    for (const f of book.audio?.files ?? []) await ctx.storage.delete(f.storageId).catch(() => {});
+    for (const f of files) await claimFile(ctx, book.userId, f.storageId, bookId);
+    const keep = new Set(files.map((f) => f.storageId));
+    for (const f of book.audio?.files ?? []) if (!keep.has(f.storageId)) await deleteOwnFile(ctx, book.userId, f.storageId);
     const old = await ctx.db
       .query("timings")
       .withIndex("by_book", (q) => q.eq("bookId", bookId))

@@ -18,6 +18,13 @@ export const vAudioFile = v.object({
 export default defineSchema({
   users: defineTable({ createdAt: v.number() }),
 
+  /** Who uploaded each stored file, and which book it belongs to, so files can't be claimed across accounts. */
+  uploads: defineTable({
+    storageId: v.id("_storage"),
+    userId: v.id("users"),
+    bookId: v.optional(v.id("books")),
+  }).index("by_storage", ["storageId"]),
+
   books: defineTable({
     userId: v.id("users"),
     title: v.string(),

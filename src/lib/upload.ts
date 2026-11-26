@@ -45,7 +45,9 @@ async function uploadFile(convex: ConvexReactClient, file: Blob): Promise<Id<"_s
     body: file,
   });
   if (!res.ok) throw new Error(`Upload failed (${res.status})`);
-  return ((await res.json()) as { storageId: Id<"_storage"> }).storageId;
+  const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+  await convex.mutation(api.books.registerUpload, { storageId });
+  return storageId;
 }
 
 /** Adds an EPUB to the signed-in user's shelf. */
