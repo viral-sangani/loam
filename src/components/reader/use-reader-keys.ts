@@ -24,6 +24,8 @@ export function useReaderKeys(
     (e: KeyboardEvent, fromBook: boolean) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") return closePanel();
+      // Typing a note or a question in a panel mustn't turn pages or open panels.
+      if (!fromBook && isTyping(e.target)) return;
       const p = prefsRef.current;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const bigger = () => updatePrefs({ fontSize: step(FONT_STEPS, p.fontSize, 1) });
@@ -36,6 +38,9 @@ export function useReaderKeys(
         "]": () => goChapter(1),
         "[": () => goChapter(-1),
         c: () => togglePanel("toc"),
+        m: () => togglePanel("notebook"),
+        q: () => togglePanel("ask"),
+        r: () => togglePanel("recap"),
         p: () => updatePrefs({ showProgress: !p.showProgress }),
         "=": bigger,
         "+": bigger,
@@ -60,3 +65,6 @@ export function useReaderKeys(
 
   return useCallback((e: KeyboardEvent) => onKey(e, true), [onKey]);
 }
+
+const isTyping = (t: EventTarget | null) =>
+  t instanceof HTMLElement && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT");

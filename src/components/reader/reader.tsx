@@ -2,24 +2,44 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useConvexAuth } from "convex/react";
 import type { Contents } from "epubjs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Id } from "@convex/_generated/dataModel";
+import type { Pos } from "@/lib/anchors";
 import { cn } from "@/lib/utils";
+import { AskPanel, useAskThread, type Passage } from "./ask-panel";
 import { AudioBar } from "./audio-bar";
+import { BookAskPanel } from "./book-ask-panel";
 import { BriefPanel } from "./brief-panel";
 import { IDLE_MS, type Panel } from "./config";
 import { ContentsPanel } from "./contents-panel";
+import { Lens, type AskKind } from "./lens";
+import { MarkPanel } from "./mark-panel";
+import { NotebookPanel } from "./notebook-panel";
 import { ProgressFooter } from "./progress-footer";
+import { ReadingRail } from "./reading-rail";
+import { RecapNudge, RecapPanel } from "./recap-panel";
 import { SettingsPanel } from "./settings-panel";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { TopBar } from "./top-bar";
 import { useAudiobook } from "./use-audiobook";
 import { useEpubReader, type FrameEvents } from "./use-epub-reader";
+import { useMarks } from "./use-marks";
 import { useReaderKeys } from "./use-reader-keys";
+import { useSelection } from "./use-selection";
 import { useTerms } from "./use-terms";
+
+/** Panels about something in the text. Like the top-bar panels, only one is open at a time. */
+type Detail = { kind: "term"; id: Id<"terms"> } | { kind: "mark"; id: Id<"marks"> } | { kind: "ask" };
+
+/** A place in the book from the URL (`?s=<section>&p=<paragraph>`), e.g. from the daily review. */
+function spotFrom(params: URLSearchParams): Pos | null {
+  const s = Number(params.get("s"));
+  const p = Number(params.get("p") ?? 0);
+  return params.has("s") && Number.isInteger(s) && s >= 0 && Number.isInteger(p) && p >= 0 ? { section: s, para: p } : null;
+}
 
 export function Reader() {
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -34,6 +54,9 @@ export function Reader() {
 function BookReader() {
   const id = useParams<{ id: string }>().id as Id<"books">;
   const router = useRouter();
+  const params = useSearchParams();
+  const spot = useMemo(() => spotFrom(params), [params]);
+  const [openAt] = useState(spot);
   const viewRef = useRef<HTMLDivElement>(null);
   const events = useRef<FrameEvents>({
     key: () => {},
@@ -42,29 +65,43 @@ function BookReader() {
     press: () => false,
     rendered: () => {},
     swipe: () => {},
+    relocated: () => {},
   });
-  const reader = useEpubReader(id, viewRef, events);
-  const { meta, status, toc, chapterIdx, pagesLeft, percent, prefs, updatePrefs, next, prev, goChapter, jumpTo, flush } = reader;
+  const reader = useEpubReader(id, viewRef, events, openAt);
+  const { meta, status, toc, chapterIdx, pagesLeft, percent, prefs, updatePrefs, next, prev, goChapter, jumpTo, goTo, position, flush } = reader;
 
   const [panel, setPanel] = useState<Panel | null>(null);
-  const [termId, setTermId] = useState<Id<"terms"> | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
   const [listening, setListening] = useState(false);
   const [chrome, setChrome] = useState(true);
   const panelOpen = useRef(false);
   useEffect(() => {
-    panelOpen.current = panel !== null || termId !== null;
-  }, [panel, termId]);
+    panelOpen.current = panel !== null || detail !== null;
+  }, [panel, detail]);
 
   // The section on screen, for underlining its terms and highlighting the spoken word.
   const contentsRef = useRef<Contents | null>(null);
   const [contents, setContents] = useState<Contents | null>(null);
 
   const audio = useAudiobook(id, reader, contentsRef, viewRef);
-  const openTerm = useCallback((t: Id<"terms">) => {
+  const openDetail = useCallback((d: Detail) => {
     setPanel(null);
-    setTermId(t);
+    setDetail(d);
   }, []);
+  const openTerm = useCallback((t: Id<"terms">) => openDetail({ kind: "term", id: t }), [openDetail]);
+  const openMark = useCallback((m: Id<"marks">) => openDetail({ kind: "mark", id: m }), [openDetail]);
   const terms = useTerms(id, contents, openTerm);
+  const marks = useMarks(id, contents, openMark);
+  const selection = useSelection(contents, viewRef);
+  const asks = useAskThread(id);
+  const { start: startAsk } = asks;
+  const ask = useCallback(
+    (passage: Passage, kind: AskKind, question?: string) => {
+      startAsk(passage, kind, question);
+      openDetail({ kind: "ask" });
+    },
+    [startAsk, openDetail],
+  );
 
   // Paging on your own while the audio plays stops the page from following the narration.
   const { userMoved } = audio;
@@ -83,6 +120,22 @@ function BookReader() {
     },
     [userMoved, goChapter],
   );
+  /** Show a paragraph (a citation, a note, a spot on the map); panels pass this as `onJump`. */
+  const jump = useCallback(
+    (pos: Pos) => {
+      userMoved();
+      void goTo(pos);
+    },
+    [userMoved, goTo],
+  );
+
+  // A spot in the URL opens the book there; a later link while the book is open jumps. Either way the
+  // query is dropped, so reloading resumes where the reader is rather than at the link.
+  useEffect(() => {
+    if (status !== "ready" || !spot) return;
+    if (spot !== openAt) jump(spot);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [status, spot, openAt, jump]);
 
   // ---- controls fade away while reading ---------------------------------
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -103,14 +156,20 @@ function BookReader() {
     return () => window.removeEventListener("mousemove", poke);
   }, [poke]);
 
-  const togglePanel = useCallback((p: Panel) => {
-    setTermId(null);
-    setPanel((cur) => (cur === p ? null : p));
-  }, []);
+  const { clear: clearSelection } = selection;
+  const togglePanel = useCallback(
+    (p: Panel) => {
+      clearSelection();
+      setDetail(null);
+      setPanel((cur) => (cur === p ? null : p));
+    },
+    [clearSelection],
+  );
   const closePanel = useCallback(() => {
+    clearSelection();
     setPanel(null);
-    setTermId(null);
-  }, []);
+    setDetail(null);
+  }, [clearSelection]);
   const { toggle: toggleAudio } = audio;
   const extraKeys = useMemo(
     () => ({
@@ -141,23 +200,41 @@ function BookReader() {
   );
 
   const { onRendered } = audio;
-  const { press } = terms;
+  const { press: pressTerm } = terms;
+  const { press: pressMark } = marks;
   useEffect(() => {
     events.current = {
       key: frameKey,
       tap: onTap,
       activity: poke,
-      press,
+      // Underlined terms win over highlights where they overlap.
+      press: (c, x, y) => pressTerm(c, x, y) || pressMark(c, x, y),
       swipe: (dir) => (dir > 0 ? userNext() : userPrev()),
       rendered: (c) => {
         contentsRef.current = c;
         setContents(c);
         onRendered(c);
       },
+      relocated: clearSelection,
     };
-  }, [frameKey, onTap, poke, press, userNext, userPrev, onRendered]);
+  }, [frameKey, onTap, poke, pressTerm, pressMark, userNext, userPrev, onRendered, clearSelection]);
 
-  const showChrome = chrome || panel !== null || termId !== null || status !== "ready";
+  // When the book was last opened, captured from the first load: saving progress soon moves it to now.
+  const [lastOpened, setLastOpened] = useState<number | null | undefined>(undefined);
+  useEffect(() => {
+    if (meta && lastOpened === undefined) setLastOpened(meta.openedAt); // eslint-disable-line react-hooks/set-state-in-effect -- captured once from the query
+  }, [meta, lastOpened]);
+
+  // Chapter names by section, for the reading map: each section takes its first contents entry.
+  const chapterLabels = useMemo(() => {
+    const out: Record<number, string> = {};
+    for (const e of toc) out[e.spine] ??= e.label;
+    return out;
+  }, [toc]);
+
+  const { picked } = selection;
+  const openedMark = detail?.kind === "mark" ? marks.marks?.find((m) => m._id === detail.id) : undefined;
+  const showChrome = chrome || panel !== null || detail !== null || status !== "ready";
 
   return (
     <div
@@ -219,7 +296,58 @@ function BookReader() {
       )}
       {panel === "type" && <SettingsPanel prefs={prefs} onChange={updatePrefs} onClose={closePanel} />}
       {panel === "keys" && <ShortcutsDialog onClose={closePanel} />}
-      {termId && <BriefPanel key={termId} termId={termId} onClose={closePanel} />}
+      {panel === "notebook" && <NotebookPanel bookId={id} toc={toc} onJump={jump} onClose={closePanel} />}
+      {panel === "ask" && (
+        <BookAskPanel bookId={id} position={position} onJump={jump} onClose={closePanel} onSwitch={setPanel} />
+      )}
+      {panel === "recap" && <RecapPanel bookId={id} position={position} onJump={jump} onClose={closePanel} onSwitch={setPanel} />}
+      {detail?.kind === "term" && <BriefPanel key={detail.id} termId={detail.id} onClose={closePanel} />}
+      {openedMark && (
+        <MarkPanel
+          key={openedMark._id}
+          mark={openedMark}
+          onUpdate={marks.update}
+          onRemove={marks.remove}
+          onExplain={() => ask({ anchor: openedMark.anchor, quote: openedMark.quote }, "explain")}
+          onClose={closePanel}
+        />
+      )}
+      {detail?.kind === "ask" && <AskPanel asks={asks} onCite={jump} onClose={closePanel} />}
+
+      {status === "ready" && (
+        <ReadingRail
+          bookId={id}
+          position={position}
+          labels={chapterLabels}
+          onJump={jump}
+          visible={showChrome && panel === null && detail === null}
+        />
+      )}
+      {/* Offered when coming back to a book after a few days. */}
+      {status === "ready" && panel === null && detail === null && (
+        <RecapNudge openedAt={lastOpened} onOpen={() => setPanel("recap")} />
+      )}
+
+      {picked && (
+        <Lens
+          key={`${picked.anchor.startPara}.${picked.anchor.startWord}-${picked.anchor.endPara}.${picked.anchor.endWord}`}
+          picked={picked}
+          onHighlight={(color) => {
+            void marks.create(picked.anchor, color);
+            clearSelection();
+          }}
+          onNote={(note) => {
+            void marks.create(picked.anchor, "yellow", note);
+            clearSelection();
+          }}
+          onAsk={(kind, question) => {
+            ask({ anchor: picked.anchor, quote: picked.quote }, kind, question);
+            clearSelection();
+          }}
+          onFreeze={selection.freeze}
+          onClose={clearSelection}
+        />
+      )}
     </div>
   );
 }

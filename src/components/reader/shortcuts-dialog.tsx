@@ -8,7 +8,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-label="Shortcuts"
-        className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-xl"
+        className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 font-serif text-lg">Shortcuts</h2>

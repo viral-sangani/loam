@@ -9,7 +9,9 @@ import { Headphones, LogOut, Plus, Sprout, X } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { SignIn } from "@/components/auth/sign-in";
+import { ReviewDesk } from "@/components/shelf/review-desk";
 import { Button } from "@/components/ui/button";
+import { useDescriptionBackfill } from "@/lib/describe";
 import { addAudiobook, addEpub } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +58,7 @@ export function Shelf() {
 function Library() {
   const convex = useConvex();
   const books = useQuery(api.books.list);
+  useDescriptionBackfill(books);
   const removeBook = useMutation(api.books.remove);
   const { signOut } = useAuthActions();
   const [dragging, setDragging] = useState(false);
@@ -212,6 +215,8 @@ function Library() {
         )}
 
         {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+
+        {!empty && <ReviewDesk />}
 
         {books && books.length > 0 && (
           <ul className="space-y-1">

@@ -5,6 +5,8 @@ import { useMutation, useQuery } from "convex/react";
 import type { Book as EpubBook, Contents, EpubCFI, Location, Rendition } from "epubjs";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import type { Pos } from "@/lib/anchors";
+import { paragraphElements, wordRange } from "@/lib/book-text";
 import {
   getLocations,
   loadBookFile,
@@ -15,6 +17,7 @@ import {
   type ReaderPrefs,
 } from "@/lib/library";
 import { INK, flatten, type Entry } from "./config";
+import { paint, paragraphAt, paragraphsOf } from "./highlights";
 
 /** Events coming from inside the book's iframe. Read through a ref so the latest handlers are used. */
 export type FrameEvents = {
@@ -28,11 +31,46 @@ export type FrameEvents = {
   rendered: (contents: Contents) => void;
   /** A horizontal swipe: 1 = next page, -1 = previous. */
   swipe: (dir: 1 | -1) => void;
+  /** The page on screen changed (paging, a jump, or a re-layout). */
+  relocated: () => void;
 };
 
 const SWIPE_PX = 40;
 const TAP_PX = 10;
 const TAP_MS = 350;
+const FLASH_MS = 1200;
+
+const contentsOf = (r: Rendition, section: number) =>
+  (r.getContents() as unknown as Contents[]).find((c) => c.sectionIndex === section);
+
+/** Whether the reader has text selected in the book frame. */
+const hasSelection = (c: Contents | undefined) => !!c && !(c.window.getSelection()?.isCollapsed ?? true);
+
+/**
+ * A CFI for the start of a paragraph. The section is loaded on its own (epub.js caches it for
+ * rendering), so this works for sections that aren't on screen yet.
+ */
+async function paragraphCfi(book: EpubBook, pos: Pos): Promise<string | null> {
+  const section = book.spine.get(pos.section);
+  if (!section) return null;
+  const root = (await (section.load(book.load.bind(book)) as unknown as Promise<Element>).catch(() => null)) as Element | null;
+  const el = root && paragraphElements(root.ownerDocument)[pos.para];
+  const range = el && wordRange(el, 0);
+  if (!range) return null;
+  range.collapse(true);
+  return section.cfiFromRange(range);
+}
+
+/** The first paragraph on the page that starts at `cfi`. */
+function pageParagraph(contents: Contents, cfi: string): number {
+  try {
+    const r = contents.range(cfi);
+    const i = paragraphAt(contents, { node: r.startContainer, offset: r.startOffset });
+    return i >= 0 ? i : Math.max(0, paragraphsOf(contents).length - 1);
+  } catch {
+    return 0;
+  }
+}
 
 function applyPrefs(r: Rendition, p: ReaderPrefs) {
   r.themes.fontSize(`${p.fontSize}%`);
@@ -42,9 +80,15 @@ function applyPrefs(r: Rendition, p: ReaderPrefs) {
 
 /**
  * Loads a book from the shelf into `viewRef`, and owns everything about the reading position:
- * the saved spot, the current chapter, progress, and text settings.
+ * the saved spot, the current chapter, progress, and text settings. `start`, if given, opens the
+ * book at that paragraph instead of the saved spot.
  */
-export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement | null>, events: RefObject<FrameEvents>) {
+export function useEpubReader(
+  id: Id<"books">,
+  viewRef: RefObject<HTMLDivElement | null>,
+  events: RefObject<FrameEvents>,
+  start: Pos | null = null,
+) {
   const book = useQuery(api.books.get, { bookId: id });
   const saveProgressMutation = useMutation(api.books.saveProgress);
   const bookRef = useRef<EpubBook | null>(null);
@@ -56,6 +100,10 @@ export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement
   const movedRef = useRef(false);
   const pendingChapter = useRef<number | null>(null);
   const stickyChapter = useRef<{ idx: number; anchor: string | null } | null>(null);
+  /** A paragraph jumped to: it becomes the reading spot on the next relocation, rather than the page start. */
+  const pendingAnchor = useRef<string | null>(null);
+  const startRef = useRef(start);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [status, setStatus] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [toc, setToc] = useState<Entry[]>([]);
@@ -63,6 +111,8 @@ export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement
   const [pagesLeft, setPagesLeft] = useState<number | null>(null);
   const [percent, setPercent] = useState<number | null>(null);
   const [prefs, setPrefs] = useState<ReaderPrefs>(loadPrefs);
+  /** The first paragraph visible on the page. */
+  const [position, setPosition] = useState<Pos | null>(null);
 
   const prefsRef = useRef(prefs);
   const chapterRef = useRef(chapterIdx);
@@ -115,6 +165,28 @@ export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement
     void rendRef.current?.display(target.href);
   }, []);
   const goChapter = useCallback((dir: 1 | -1) => jumpTo(chapterRef.current + dir), [jumpTo]);
+
+  /** Show a paragraph and briefly light it up, e.g. a citation in an answer. Counts as the reader moving. */
+  const goTo = useCallback(async (pos: Pos): Promise<boolean> => {
+    const r = rendRef.current;
+    const book = bookRef.current;
+    if (!r || !book) return false;
+    const cfi = await paragraphCfi(book, pos);
+    if (!cfi || rendRef.current !== r) return false;
+    movedRef.current = true;
+    pendingAnchor.current = cfi;
+    await r.display(cfi);
+    const contents = contentsOf(r, pos.section);
+    const el = contents && paragraphsOf(contents)[pos.para];
+    if (contents && el) {
+      const range = contents.document.createRange();
+      range.selectNodeContents(el);
+      clearTimeout(flashTimer.current);
+      paint(contents, "loam-flash", [range]);
+      flashTimer.current = setTimeout(() => paint(contents, "loam-flash", []), FLASH_MS);
+    }
+    return true;
+  }, []);
 
   const missing = book === null;
   const epub = book?.epub;
@@ -188,6 +260,18 @@ export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement
           "text-decoration": "underline dotted rgba(176,112,64,.85) 1.5px",
           "text-underline-offset": "3px",
         },
+        // Highlights: translucent washes that tint the page in both parchment and night.
+        "::highlight(loam-mark-yellow)": { "background-color": "rgba(226,184,52,.34)", color: "inherit" },
+        "::highlight(loam-mark-green)": { "background-color": "rgba(128,160,84,.32)", color: "inherit" },
+        "::highlight(loam-mark-rose)": { "background-color": "rgba(214,112,112,.3)", color: "inherit" },
+        "::highlight(loam-mark-blue)": { "background-color": "rgba(96,146,206,.3)", color: "inherit" },
+        "::highlight(loam-mark-note)": {
+          "text-decoration": "underline rgba(176,112,64,.6) 1.5px",
+          "text-underline-offset": "4px",
+        },
+        // A selection kept while its note or question is typed (the frame's own selection is lost on focus).
+        "::highlight(loam-picked)": { "background-color": "rgba(122,140,80,.28)", color: "inherit" },
+        "::highlight(loam-flash)": { "background-color": "rgba(122,140,80,.3)", color: "inherit" },
       });
       applyPrefs(rendition, prefsRef.current);
 
@@ -227,9 +311,16 @@ export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement
 
       rendition.on("relocated", (loc: Location) => {
         if (movedRef.current || !anchorRef.current) {
-          anchorRef.current = loc.start.cfi;
+          anchorRef.current = pendingAnchor.current ?? loc.start.cfi;
           movedRef.current = false;
         }
+        pendingAnchor.current = null;
+        const contents = contentsOf(rendition, loc.start.index);
+        if (contents) {
+          const p = { section: loc.start.index, para: pageParagraph(contents, loc.start.cfi) };
+          setPosition((cur) => (cur && cur.section === p.section && cur.para === p.para ? cur : p));
+        }
+        events.current.relocated();
         const cfi = anchorRef.current;
         if (pendingChapter.current !== null) {
           stickyChapter.current = { idx: pendingChapter.current, anchor: cfi };
@@ -255,14 +346,21 @@ export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement
       rendition.on("keydown", (e: KeyboardEvent) => events.current.key(e));
       rendition.on("mousemove", () => events.current.activity());
       let lastTouch = 0;
+      // A press that only clears a selection, or that ends one, is not a tap on the text.
+      let selectedAtDown = false;
+      rendition.on("mousedown", (_e: MouseEvent, contents: Contents) => {
+        selectedAtDown = hasSelection(contents);
+      });
       rendition.on("click", (e: MouseEvent, contents: Contents) => {
         if (Date.now() - lastTouch < 800) return; // the click that follows a tap was handled on touchend
+        if (selectedAtDown || hasSelection(contents)) return;
         events.current.press(contents, e.clientX, e.clientY);
       });
       let touch: { x: number; y: number; t: number } | null = null;
-      rendition.on("touchstart", (e: TouchEvent) => {
+      rendition.on("touchstart", (e: TouchEvent, contents: Contents) => {
         const p = e.changedTouches[0];
         touch = p ? { x: p.screenX, y: p.screenY, t: Date.now() } : null;
+        selectedAtDown = hasSelection(contents);
       });
       rendition.on("touchend", (e: TouchEvent, contents: Contents) => {
         const p = e.changedTouches[0];
@@ -272,16 +370,18 @@ export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement
         const dy = p.screenY - touch.y;
         const quick = Date.now() - touch.t < TAP_MS;
         touch = null;
+        // With text selected, drags adjust the selection and taps dismiss it.
+        if (selectedAtDown || hasSelection(contents)) return;
         if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) return events.current.swipe(dx < 0 ? 1 : -1);
-        const selecting = !!e.view?.getSelection()?.toString();
-        if (quick && Math.abs(dx) < TAP_PX && Math.abs(dy) < TAP_PX && !selecting) {
+        if (quick && Math.abs(dx) < TAP_PX && Math.abs(dy) < TAP_PX) {
           if (events.current.press(contents, p.clientX, p.clientY)) return;
           events.current.tap(p.screenX / window.screen.width);
         }
       });
 
       anchorRef.current = savedCfi.current || null;
-      await rendition.display(anchorRef.current || undefined);
+      const opened = startRef.current && (await goTo(startRef.current));
+      if (!opened) await rendition.display(anchorRef.current || undefined);
       if (cancelled) return;
       setStatus("ready");
 
@@ -325,7 +425,7 @@ export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement
       bookRef.current = null;
       anchorRef.current = null;
     };
-  }, [id, epub, epubUrl, viewRef, events, next, prev, flush, saveSoon]);
+  }, [id, epub, epubUrl, viewRef, events, next, prev, flush, saveSoon, goTo]);
 
   // Save the spot when the tab is hidden or closed (mobile browsers often skip unload).
   useEffect(() => {
@@ -352,6 +452,8 @@ export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement
     show,
     jumpTo,
     goChapter,
+    position,
+    goTo,
     flush,
     rendition: rendRef,
   };

@@ -9,6 +9,9 @@ export const SHORTCUTS: [string, string][] = [
   ["← →  or  Space ⇧Space", "Previous / next page"],
   ["[  ]", "Previous / next chapter"],
   ["C", "Contents"],
+  ["M", "Notebook"],
+  ["Q", "Ask about the book so far"],
+  ["R", "The story so far"],
   ["P", "Show / hide progress"],
   ["−  =", "Smaller / larger text"],
   ["N", "Parchment / night"],
@@ -18,7 +21,7 @@ export const SHORTCUTS: [string, string][] = [
   ["?", "Shortcuts"],
 ];
 
-export type Panel = "toc" | "type" | "keys";
+export type Panel = "toc" | "type" | "keys" | "notebook" | "ask" | "recap";
 
 /** A table-of-contents entry, resolved to its spine section and optional #anchor. */
 export type Entry = { label: string; href: string; depth: number; spine: number; hash: string | null };

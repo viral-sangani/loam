@@ -14,6 +14,13 @@ one-liners, what it means in this passage, a video and a Wikipedia link) in a si
   chapter, to a cheap model (GPT-6 Luna by default) to pick terms worth explaining.
 - **Briefings** (`convex/briefs.ts`): built on first tap and cached. Wikipedia supplies the summary,
   image and link; the model writes the one-liners and the passage context.
+- **Reading companions** (`convex/asks.ts`, `recaps.ts`, `marks.ts`, `review.ts`, `notebook.ts`):
+  select any passage to highlight it, add a note, or ask (Explain, Define, Simplify, or your own
+  question); ask about the whole book so far; read "the story so far" when coming back. Answers only
+  see the text up to where you are (no spoilers) and cite paragraphs you can jump to. Everything you
+  mark, ask and look up collects in a notebook (exports to Markdown), and a daily review on the shelf
+  brings highlights and looked-up terms back, spaced out like flashcards. A reading map on the right
+  edge shows the whole book with your highlights.
 - **Aligner** (`worker/`): runs on your machine. It transcribes the audiobook with whisper.cpp
   (free, local) and matches the spoken words to the book's words, giving every word a start time.
 
@@ -54,5 +61,5 @@ prod Convex URL so it serves the live site.
 
 ## Reader shortcuts
 
-`← →` / `Space` pages · `[ ]` chapters · `C` contents · `A` audiobook · `K` play/pause · `−` `=` text
-size · `N` parchment/night · `P` progress · `?` all shortcuts
+`← →` / `Space` pages · `[ ]` chapters · `C` contents · `M` notebook · `Q` ask the book · `R` story so
+far · `A` audiobook · `K` play/pause · `−` `=` text size · `N` parchment/night · `P` progress · `?` all shortcuts

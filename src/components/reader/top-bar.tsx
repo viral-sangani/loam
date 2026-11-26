@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Headphones, Keyboard, List } from "lucide-react";
+import { ArrowLeft, Headphones, Keyboard, List, MessageCircleQuestionMark, NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Panel } from "./config";
@@ -22,7 +22,7 @@ export function TopBar({
   listening: boolean;
   onListen: () => void;
 }) {
-  const icon = (p: Panel) => cn("text-muted-foreground pointer-coarse:size-11", panel === p && "bg-muted text-foreground");
+  const icon = (...ps: Panel[]) => cn("text-muted-foreground pointer-coarse:size-11", panel && ps.includes(panel) && "bg-muted text-foreground");
   return (
     <header
       className={cn(
@@ -47,6 +47,19 @@ export function TopBar({
           onClick={onListen}
         >
           <Headphones />
+        </Button>
+        {/* One button for "ask" and "recap", two views of the same companion switched inside the panel; it closes either. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Ask about the book"
+          className={icon("ask", "recap")}
+          onClick={() => onToggle(panel === "recap" ? "recap" : "ask")}
+        >
+          <MessageCircleQuestionMark />
+        </Button>
+        <Button variant="ghost" size="icon" aria-label="Notebook" className={icon("notebook")} onClick={() => onToggle("notebook")}>
+          <NotebookPen />
         </Button>
         <Button variant="ghost" size="icon" aria-label="Contents" className={icon("toc")} onClick={() => onToggle("toc")}>
           <List />
