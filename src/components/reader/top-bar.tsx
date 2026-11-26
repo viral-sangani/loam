@@ -26,7 +26,9 @@ export function TopBar({
   return (
     <header
       className={cn(
-        "absolute inset-x-0 top-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-2 px-2 pointer-coarse:px-1 pt-[env(safe-area-inset-top)] transition-opacity duration-300 sm:px-4",
+        "absolute inset-x-0 top-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-2 px-2 pt-[env(safe-area-inset-top)] transition-opacity duration-300 pointer-coarse:px-1 sm:px-4",
+        // Sideways phones: the bar floats over the page, so it gets the page colour behind it and clears the notch.
+        "short:h-12 short:border-b short:border-border short:bg-background short:pr-[max(0.5rem,env(safe-area-inset-right))] short:pl-[max(0.5rem,env(safe-area-inset-left))]",
         visible ? "opacity-100" : "pointer-events-none opacity-0",
       )}
     >

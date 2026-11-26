@@ -35,61 +35,66 @@ export function SignIn() {
   const pending = signingIn || signingUp;
 
   return (
-    <div className="relative z-10 mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-5 py-16">
-      <div className="mb-10 flex items-center gap-2">
-        <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
-          <Sprout className="size-4" />
-        </span>
-        <span className="font-serif text-lg leading-7 font-medium">Loam</span>
+    // Sideways phones: the welcome on the left and the form on the right, so both fit the short screen.
+    <div className="relative z-10 mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-5 py-16 short:grid short:max-w-3xl short:grid-cols-2 short:content-center short:items-center short:gap-x-12 short:pt-[max(1.5rem,env(safe-area-inset-top))] short:pr-[max(1.5rem,env(safe-area-inset-right))] short:pb-[max(1.5rem,env(safe-area-inset-bottom))] short:pl-[max(1.5rem,env(safe-area-inset-left))]">
+      <div>
+        <div className="mb-10 flex items-center gap-2 short:mb-6">
+          <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <Sprout className="size-4" />
+          </span>
+          <span className="font-serif text-lg leading-7 font-medium">Loam</span>
+        </div>
+        <h1 className="font-serif text-2xl leading-8">{mode === "in" ? "Sign in" : "Create an account"}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Your books, audiobooks and notes, synced across devices.</p>
       </div>
-      <h1 className="font-serif text-2xl leading-8">{mode === "in" ? "Sign in" : "Create an account"}</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Your books, audiobooks and notes, synced across devices.</p>
 
-      <form
-        className="mt-8 space-y-3"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const form = new FormData(e.currentTarget);
-          const credentials = { username: String(form.get("username")), password: String(form.get("password")) };
-          setError(null);
-          const result = mode === "in" ? await signIn(credentials) : await signUp(credentials);
-          if (result.status === "error") {
-            const code = (result.userError as { error?: string }).error ?? "OTHER_ERROR";
-            setError(MESSAGES[code] ?? "Something went wrong. Try again.");
-          }
-        }}
-      >
-        <input name="username" aria-label="Username" autoComplete="username" placeholder="Username" required className={input} />
-        <input
-          name="password"
-          type="password"
-          autoComplete={mode === "in" ? "current-password" : "new-password"}
-          placeholder="Password"
-          aria-label="Password"
-          required
-          className={input}
-        />
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        <Button type="submit" disabled={pending} className="h-11 w-full cursor-pointer rounded-lg text-sm">
-          {pending ? (mode === "in" ? "Signing in…" : "Creating account…") : mode === "in" ? "Sign in" : "Create account"}
-        </Button>
-      </form>
+      <div className="flex flex-col">
+        <form
+          className="mt-8 space-y-3 short:mt-0"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const form = new FormData(e.currentTarget);
+            const credentials = { username: String(form.get("username")), password: String(form.get("password")) };
+            setError(null);
+            const result = mode === "in" ? await signIn(credentials) : await signUp(credentials);
+            if (result.status === "error") {
+              const code = (result.userError as { error?: string }).error ?? "OTHER_ERROR";
+              setError(MESSAGES[code] ?? "Something went wrong. Try again.");
+            }
+          }}
+        >
+          <input name="username" aria-label="Username" autoComplete="username" placeholder="Username" required className={input} />
+          <input
+            name="password"
+            type="password"
+            autoComplete={mode === "in" ? "current-password" : "new-password"}
+            placeholder="Password"
+            aria-label="Password"
+            required
+            className={input}
+          />
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={pending} className="h-11 w-full cursor-pointer rounded-lg text-sm">
+            {pending ? (mode === "in" ? "Signing in…" : "Creating account…") : mode === "in" ? "Sign in" : "Create account"}
+          </Button>
+        </form>
 
-      <button
-        type="button"
-        onClick={() => {
-          setMode(mode === "in" ? "up" : "in");
-          setError(null);
-        }}
-        className="mt-6 min-h-11 cursor-pointer self-start text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
-      >
-        {mode === "in" ? "New here? " : "Have an account? "}
-        <span className="text-primary underline underline-offset-4">{mode === "in" ? "Create an account" : "Sign in"}</span>
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode(mode === "in" ? "up" : "in");
+            setError(null);
+          }}
+          className="mt-6 min-h-11 cursor-pointer self-start text-sm short:mt-3 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+        >
+          {mode === "in" ? "New here? " : "Have an account? "}
+          <span className="text-primary underline underline-offset-4">{mode === "in" ? "Create an account" : "Sign in"}</span>
+        </button>
+      </div>
     </div>
   );
 }

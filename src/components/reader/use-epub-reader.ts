@@ -37,6 +37,13 @@ export type FrameEvents = {
   relocated: () => void;
 };
 
+/**
+ * Two pages side by side once the page area is wide enough, and always on a phone held sideways
+ * (its short height makes one wide column of long lines hard to read). Matches the `short` variant.
+ */
+const SHORT_LANDSCAPE = "(orientation: landscape) and (max-height: 500px)";
+const minSpreadWidth = () => (window.matchMedia(SHORT_LANDSCAPE).matches ? 480 : 1100);
+
 const SWIPE_PX = 40;
 const TAP_PX = 10;
 const TAP_MS = 350;
@@ -306,7 +313,7 @@ export function useEpubReader(
         height: "100%",
         flow: "paginated",
         spread: "auto",
-        minSpreadWidth: 1100,
+        minSpreadWidth: minSpreadWidth(),
         allowScriptedContent: false,
       });
       rendRef.current = rendition;
@@ -494,6 +501,29 @@ export function useEpubReader(
       anchorRef.current = null;
     };
   }, [id, epub, epubUrl, viewRef, events, next, prev, flush, saveSoon, goTo]);
+
+  // Turning a phone sideways switches to two pages (and back); then return to the reading spot,
+  // since changing the page layout moves the text.
+  useEffect(() => {
+    const mq = window.matchMedia(SHORT_LANDSCAPE);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const changed = () => {
+      const r = rendRef.current;
+      if (!r) return;
+      r.spread("auto", minSpreadWidth());
+      clearTimeout(timer);
+      // epub.js re-lays out on its own (debounced) resize as well; settle after both.
+      timer = setTimeout(() => {
+        const cfi = anchorRef.current ?? r.location?.start?.cfi;
+        if (cfi) void r.display(cfi);
+      }, 350);
+    };
+    mq.addEventListener("change", changed);
+    return () => {
+      mq.removeEventListener("change", changed);
+      clearTimeout(timer);
+    };
+  }, []);
 
   // Save the spot when the tab is hidden or closed (mobile browsers often skip unload).
   useEffect(() => {

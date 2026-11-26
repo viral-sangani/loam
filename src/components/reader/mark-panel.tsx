@@ -46,7 +46,7 @@ export function MarkPanel({
 
   return (
     <Sheet title="Highlight" variant="popover" onClose={onClose}>
-      <div className="space-y-4 px-5 pt-1 pb-6 sm:p-5">
+      <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain px-5 pt-1 pb-6 sm:p-5 short:p-5">
         <blockquote className="line-clamp-6 font-book text-base leading-relaxed">
           <span className="box-decoration-clone px-0.5" style={{ background: `color-mix(in oklch, ${SWATCH[color]} 40%, transparent)` }}>
             {mark.quote}

@@ -195,7 +195,9 @@ export function ReadingRail({
       className={cn(
         // A narrow hit strip at the very edge: the page-turn margin beside it stays clickable,
         // and while hidden the whole rail lets clicks through.
-        "group fixed top-[calc(4.5rem+env(safe-area-inset-top))] right-1 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 hidden w-6 cursor-pointer touch-none justify-center outline-none select-none md:flex",
+        "group fixed top-[calc(4.5rem+env(safe-area-inset-top))] right-[max(0.25rem,env(safe-area-inset-right))] bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 hidden w-6 cursor-pointer touch-none justify-center outline-none select-none md:flex",
+        // Sideways phones: the top bar is shorter, and the rail clears the notch when it's on the right.
+        "short:top-16 short:bottom-[calc(3.5rem+env(safe-area-inset-bottom))]",
         "rounded-full focus-visible:ring-2 focus-visible:ring-ring/50",
         "motion-safe:transition-opacity motion-safe:duration-500",
         shown ? "opacity-100" : "pointer-events-none opacity-0",

@@ -18,10 +18,10 @@ export function ProgressFooter({
 
   return (
     <footer
-      className="absolute inset-x-0 bottom-0 z-20 px-[max(1.25rem,6vw)] pb-[max(1rem,env(safe-area-inset-bottom))]"
+      className="absolute inset-x-0 bottom-0 z-20 pr-[max(1.25rem,6vw,calc(env(safe-area-inset-right)+0.75rem))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,6vw,calc(env(safe-area-inset-left)+0.75rem))] short:pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       aria-label="Reading progress"
     >
-      <div className="mb-2 flex items-baseline justify-between gap-4 text-xs leading-4 text-muted-foreground">
+      <div className="mb-2 flex items-baseline short:mb-1.5 justify-between gap-4 text-xs leading-4 text-muted-foreground">
         <span className="truncate" data-testid="chapter">
           {chapter}
         </span>

@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { ChevronLeft, ChevronRight, Ellipsis, Headphones, LogOut, Plus, Trash2, X } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import { ReviewDesk } from "@/components/shelf/review-desk";
+import { cn } from "@/lib/utils";
 import { createRoom, type RoomController, type RoomState } from "./engine";
 import { useMedia, useViewport, type LibraryProps } from "./library";
 import { duration, progressLabel, readLabel, statusLine, toShelfBook, type ShelfBook } from "./model";
@@ -61,7 +62,10 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
   const [confirming, setConfirming] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const touch = useMedia("(pointer: coarse)");
-  const narrow = useMedia("(max-width: 639px)");
+  // Below desktop width the header's pills don't all fit on one line with a book in hand, so "Add a book" is an icon.
+  const roundAdd = useMedia("(max-width: 1023px)");
+  // A sideways phone: little height, so the bars get compact and the hint line is left to screen readers.
+  const short = useMedia("(orientation: landscape) and (max-height: 500px)");
   const vp = useViewport();
   const handoff = useHandoff();
   const review = useQuery(api.review.today, {});
@@ -203,12 +207,12 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
       />
 
       {/* top bar */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-start gap-x-2 px-4 pt-[max(8px,env(safe-area-inset-top))] sm:px-6">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-start gap-x-2 pt-[max(8px,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] short:pt-1">
         <span className="mr-2 inline-flex min-h-11 items-center text-2xl leading-none font-semibold">Loam</span>
         <nav aria-label="Room" className="pointer-events-auto flex flex-wrap items-center gap-2 max-sm:order-last max-sm:w-full">
           {inHand && rs.stage === "open" && (
-            <Pill onClick={() => call("go", "held")} icon={<X aria-hidden />}>
-              Close the book
+            <Pill onClick={() => call("go", "held")} icon={<X aria-hidden />} round={short} aria-label={short ? "Close the book" : undefined}>
+              {short ? null : "Close the book"}
             </Pill>
           )}
           {inHand && (
@@ -216,12 +220,13 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
               Back to shelf
             </Pill>
           )}
-          {rs.stage !== "room" && <Pill onClick={() => call("go", "room")}>Zoom out</Pill>}
+          {/* Sideways phones keep one way back while a book is in hand; zooming out is a step further. */}
+          {rs.stage !== "room" && !(short && inHand) && <Pill onClick={() => call("go", "room")}>Zoom out</Pill>}
         </nav>
         <div className="pointer-events-auto ml-auto flex items-center justify-end gap-2">
           {!empty && books && (
-            <Pill onClick={addBooks} disabled={busy} icon={<Plus aria-hidden />} round={narrow} aria-label={narrow ? "Add a book" : undefined}>
-              {narrow ? null : busy ? "Shelving…" : "Add a book"}
+            <Pill onClick={addBooks} disabled={busy} icon={<Plus aria-hidden />} round={roundAdd || short} aria-label={roundAdd || short ? "Add a book" : undefined} title={roundAdd || short ? "Add a book" : undefined}>
+              {roundAdd || short ? null : busy ? "Shelving…" : "Add a book"}
             </Pill>
           )}
           {due > 0 && (
@@ -236,7 +241,7 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
 
       {/* the book in hand */}
       {inHand && held && rs.stage === "held" && !rs.cardOut && (
-        <div className="pointer-events-none absolute inset-x-0 top-[calc(max(8px,env(safe-area-inset-top))+56px)] z-20 mx-auto max-w-[min(640px,calc(100%-32px))] text-center max-sm:hidden">
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(max(8px,env(safe-area-inset-top))+56px)] z-20 mx-auto max-w-[min(640px,calc(100%-32px))] text-center max-md:hidden short:hidden">
           {held.author && <p className="sc-wide truncate text-sm text-[var(--lib-brass)]">{held.author}</p>}
           <p className="truncate text-lg italic">{held.title}</p>
         </div>
@@ -257,7 +262,7 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
 
       {/* empty shelf */}
       {empty && rs.ready && (
-        <div className="absolute inset-x-4 bottom-[max(72px,calc(env(safe-area-inset-bottom)+64px))] z-20 mx-auto max-w-sm rounded-2xl border border-[var(--lib-line)] bg-[rgba(16,10,7,0.88)] px-6 py-8 text-center shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
+        <div className="absolute inset-x-4 bottom-[max(72px,calc(env(safe-area-inset-bottom)+64px))] z-20 mx-auto max-w-sm rounded-2xl border border-[var(--lib-line)] bg-[rgba(16,10,7,0.88)] px-6 py-8 text-center shadow-[0_20px_50px_rgba(0,0,0,0.6)] short:bottom-[max(16px,env(safe-area-inset-bottom))] short:py-5">
           <h1 className="text-2xl font-semibold">Your shelf is empty</h1>
           <p className="mt-2 text-base text-[var(--lib-muted)]">Add an EPUB to put it on the shelf.</p>
           <div className="mt-6 flex justify-center">
@@ -270,7 +275,7 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
       )}
 
       {/* actions and the hint line */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-4 pb-[max(12px,env(safe-area-inset-bottom))]">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 pr-[max(1rem,env(safe-area-inset-right))] pb-[max(12px,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] short:pb-[max(4px,env(safe-area-inset-bottom))]">
         {error && (
           <p role="alert" className="pointer-events-auto rounded-full border border-[rgba(224,122,110,0.5)] bg-[rgba(40,12,10,0.85)] px-4 py-2 text-sm text-[#f0b0a6]">
             {error}
@@ -317,8 +322,15 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
                   </Pill>
                 )}
                 {(held.audio.kind === "none" || held.audio.kind === "uploading") && (
-                  <Pill icon={<Headphones aria-hidden />} disabled={held.audio.kind === "uploading"} onClick={() => addAudio(held.id)}>
-                    {held.audio.kind === "uploading" ? `Uploading ${held.audio.pct}%` : "Add audiobook"}
+                  <Pill
+                    icon={<Headphones aria-hidden />}
+                    disabled={held.audio.kind === "uploading"}
+                    onClick={() => addAudio(held.id)}
+                    round={short && held.audio.kind === "none"}
+                    aria-label={short && held.audio.kind === "none" ? "Add audiobook" : undefined}
+                    title={short && held.audio.kind === "none" ? "Add audiobook" : undefined}
+                  >
+                    {held.audio.kind === "uploading" ? `Uploading ${held.audio.pct}%` : short ? null : "Add audiobook"}
                   </Pill>
                 )}
                 <Pill round aria-label="More actions" onClick={() => setMore(true)} icon={<Ellipsis aria-hidden />} />
@@ -327,7 +339,15 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
             )}
           </div>
         )}
-        <p id="room-hint" aria-live="polite" className="max-w-[min(640px,100%)] text-center text-sm leading-snug text-[rgba(239,228,207,0.85)] [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
+        <p
+          id="room-hint"
+          aria-live="polite"
+          className={cn(
+            "max-w-[min(640px,100%)] text-center text-sm leading-snug text-[rgba(239,228,207,0.85)] [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]",
+            // Sideways phones: the actions need the height; the hint stays for screen readers (and an empty shelf's card says it).
+            short && "sr-only",
+          )}
+        >
           {hint}
           {rs.overflow > 0 && ` ${rs.overflow} more ${rs.overflow === 1 ? "book is" : "books are"} in the list.`}
         </p>
@@ -339,7 +359,7 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
           data-review
           role="dialog"
           aria-label="Today's review"
-          className="absolute top-[calc(max(8px,env(safe-area-inset-top))+56px)] right-4 z-30 w-[min(420px,calc(100%-32px))] rounded-2xl border border-[var(--lib-line)] bg-[rgba(20,16,12,0.96)] p-2 shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+          className="absolute top-[calc(max(8px,env(safe-area-inset-top))+56px)] right-[max(1rem,env(safe-area-inset-right))] z-30 max-h-[calc(100dvh-max(8px,env(safe-area-inset-top))-56px-max(12px,env(safe-area-inset-bottom)))] w-[min(420px,calc(100%-32px))] overflow-y-auto overscroll-contain rounded-2xl border border-[var(--lib-line)] bg-[rgba(20,16,12,0.96)] p-2 shadow-[0_20px_50px_rgba(0,0,0,0.6)] short:top-[calc(max(4px,env(safe-area-inset-top))+48px)]"
         >
           <div className="flex justify-end">
             <Pill round aria-label="Close review" onClick={() => setReviewOpen(false)} icon={<X aria-hidden />} autoFocus />

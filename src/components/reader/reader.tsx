@@ -236,6 +236,16 @@ function BookReader() {
     return () => meta.remove();
   }, [prefs.theme]);
 
+  // Opening or closing the audio bar changes the page area; epub.js only re-lays out on window
+  // resizes, so ask it to (it keeps the reading spot).
+  const { rendition } = reader;
+  useEffect(() => {
+    if (status !== "ready") return;
+    // With no size given epub.js measures its container (the typings insist on one).
+    const frame = requestAnimationFrame(() => (rendition.current as { resize: () => void } | null)?.resize());
+    return () => cancelAnimationFrame(frame);
+  }, [listening, status, rendition]);
+
   // Chapter names by section, for the reading map: each section takes its first contents entry.
   const chapterLabels = useMemo(() => {
     const out: Record<number, string> = {};
@@ -265,7 +275,17 @@ function BookReader() {
         }}
       />
 
-      <div className="relative flex-1 px-[max(1.25rem,6vw)] pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
+      <div
+        className={cn(
+          "relative min-h-0 flex-1 pt-[calc(3.5rem+env(safe-area-inset-top))] pr-[max(1.25rem,6vw,calc(env(safe-area-inset-right)+0.75rem))] pl-[max(1.25rem,6vw,calc(env(safe-area-inset-left)+0.75rem))]",
+          // Sideways phones have little height: the top bar floats over the page instead of taking a band.
+          "short:pt-[calc(1.25rem+env(safe-area-inset-top))]",
+          // Leave room for whichever bar sits at the bottom, so it never covers the last lines.
+          listening && status === "ready"
+            ? "pb-[calc(6.5rem+env(safe-area-inset-bottom))] short:pb-[calc(6rem+env(safe-area-inset-bottom))]"
+            : "pb-[calc(3.5rem+env(safe-area-inset-bottom))] short:pb-[calc(2.25rem+env(safe-area-inset-bottom))]",
+        )}
+      >
         <EdgeButton side="left" onClick={userPrev} />
         <div ref={viewRef} className="h-full w-full" />
         <EdgeButton side="right" onClick={userNext} />

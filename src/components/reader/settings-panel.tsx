@@ -22,7 +22,7 @@ export function SettingsPanel({
   const lineAt = LINE_STEPS.indexOf(prefs.lineHeight);
   return (
     <Sheet title="Text and theme" variant="popover" onClose={onClose}>
-      <div className="space-y-5 px-5 pt-1 pb-6 sm:p-5">
+      <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain px-5 pt-1 pb-6 sm:p-5 short:p-5">
         <Segmented label="Theme" options={THEMES} value={prefs.theme} onChange={(theme) => onChange({ theme })} />
         <div className="space-y-1">
           <Row label="Text size">

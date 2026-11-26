@@ -10,8 +10,8 @@ import { Btn, IconBtn } from "./kit";
  */
 
 /**
- * A panel over the page. On phones it slides up from the bottom; on larger screens it is
- * a side panel ("side") or a small card under the top bar ("popover").
+ * A panel over the page. On phones held upright it slides up from the bottom; on larger screens
+ * and sideways phones it is a side panel ("side") or a small card under the top bar ("popover").
  */
 export function Sheet({
   title,
@@ -26,20 +26,31 @@ export function Sheet({
 }) {
   return (
     <>
-      <div aria-hidden className="absolute inset-0 z-30 animate-in bg-scrim duration-200 fade-in sm:bg-transparent" onClick={onClose} />
+      <div
+        aria-hidden
+        className="absolute inset-0 z-30 animate-in bg-scrim duration-200 fade-in sm:bg-transparent short:bg-transparent"
+        onClick={onClose}
+      />
       <section
         role="dialog"
         aria-label={title}
         className={cn(
           "absolute inset-x-0 bottom-0 z-40 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-border bg-card text-card-foreground pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.18)]",
-          "animate-in slide-in-from-bottom-8 fade-in duration-200 sm:animate-none",
-          variant === "side" &&
-            "sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:w-full sm:max-w-sm sm:rounded-none sm:border-t-0 sm:border-l sm:pb-0 sm:shadow-[-8px_0_24px_-16px_rgb(0_0_0/0.18)]",
-          variant === "popover" &&
-            "sm:top-[calc(3.5rem+env(safe-area-inset-top))] sm:right-4 sm:bottom-auto sm:left-auto sm:w-80 sm:rounded-xl sm:border sm:pb-0 sm:shadow-lg sm:shadow-black/8",
+          "animate-in slide-in-from-bottom-8 fade-in duration-200 sm:animate-none short:animate-none",
+          // Tablets, desktops and sideways phones: a full-height panel on the right. Its width grows by
+          // the notch on that side (sideways phones), so the content keeps its 24rem.
+          variant === "side" && [
+            "sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:w-full sm:max-w-[calc(24rem+env(safe-area-inset-right))] sm:rounded-none sm:border-t-0 sm:border-l sm:pt-[env(safe-area-inset-top)] sm:pr-[env(safe-area-inset-right)] sm:shadow-[-8px_0_24px_-16px_rgb(0_0_0/0.18)]",
+            "short:inset-y-0 short:right-0 short:left-auto short:max-h-none short:w-full short:max-w-[calc(min(24rem,62vw)+env(safe-area-inset-right))] short:rounded-none short:border-t-0 short:border-l short:pt-0 short:pr-[env(safe-area-inset-right)] short:shadow-[-8px_0_24px_-16px_rgb(0_0_0/0.18)]",
+          ],
+          // A card under the top bar's right end, never taller than the screen below the bar.
+          variant === "popover" && [
+            "sm:top-[calc(3.5rem+env(safe-area-inset-top))] sm:right-[max(1rem,calc(env(safe-area-inset-right)+0.5rem))] sm:bottom-auto sm:left-auto sm:max-h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-1rem)] sm:w-80 sm:rounded-xl sm:border sm:pb-0 sm:shadow-lg sm:shadow-black/8",
+            "short:top-[3.25rem] short:right-[max(0.5rem,calc(env(safe-area-inset-right)+0.5rem))] short:bottom-auto short:left-auto short:max-h-[calc(100dvh-3.25rem-max(0.5rem,env(safe-area-inset-bottom)))] short:w-80 short:rounded-xl short:border short:pb-0 short:shadow-lg short:shadow-black/8",
+          ],
         )}
       >
-        <SheetHeader title={title} onClose={onClose} className={cn(variant === "popover" && "sm:hidden")} />
+        <SheetHeader title={title} onClose={onClose} className={cn(variant === "popover" && "sm:hidden short:hidden")} />
         {children}
       </section>
     </>

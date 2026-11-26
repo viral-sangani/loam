@@ -32,7 +32,11 @@ export function hasWebGL2() {
   return webgl2;
 }
 
-const QUERIES = ["(max-width: 767px)", "(prefers-reduced-motion: reduce)"];
+/**
+ * Phones get the list by default, held either way: upright they're narrow, sideways they're short
+ * (the room's bars and the book in hand would fight over ~390px of height).
+ */
+const QUERIES = ["(max-width: 767px)", "(orientation: landscape) and (max-height: 500px)", "(prefers-reduced-motion: reduce)"];
 
 /** Why the list is the better default here, if it is: phones, reduced motion, Save-Data. */
 function listPreferred() {
@@ -60,8 +64,8 @@ function snapshot(): LibraryView {
 }
 
 /**
- * Room or List. The reader's own choice wins (stored in localStorage); otherwise phones, reduced
- * motion and Save-Data get the list. Without WebGL2 it is always the list.
+ * Room or List. The reader's own choice wins (stored in localStorage); otherwise phones (upright
+ * or sideways), reduced motion and Save-Data get the list. Without WebGL2 it is always the list.
  */
 export function useLibraryView() {
   const view = useSyncExternalStore(subscribe, snapshot, () => "list" as LibraryView);

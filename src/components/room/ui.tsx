@@ -70,7 +70,7 @@ export function ViewToggle({ view, onChange }: { view: "room" | "list"; onChange
             )}
           >
             {icon}
-            <span className="max-sm:sr-only">{label}</span>
+            <span className="max-sm:sr-only short:sr-only">{label}</span>
           </button>
         ))}
       </span>
@@ -84,21 +84,25 @@ export function ViewToggle({ view, onChange }: { view: "room" | "list"; onChange
 export function ClothCover({ book, className, small }: { book: ShelfBook; className?: string; small?: boolean }) {
   return (
     <div
-      className={cn("relative overflow-hidden rounded-[3px_6px_6px_3px]", className)}
+      className={cn("@container relative overflow-hidden rounded-[3px_6px_6px_3px]", className)}
       style={{
         background: `repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 3px), radial-gradient(ellipse at 50% 45%, rgba(255,255,255,0.06), rgba(0,0,0,0.35)), ${book.cloth.cloth}`,
         color: book.cloth.foil,
       }}
     >
       <div
-        className={cn("absolute flex flex-col items-center justify-center text-center", small ? "inset-1.5 gap-1 border p-1" : "inset-4 gap-4 border-2 p-6")}
+        className={cn(
+          "absolute flex flex-col items-center justify-center text-center",
+          // Mid-sized covers (a sideways phone's book page) get tighter margins and type, so the title fits.
+          small ? "inset-1.5 gap-1 border p-1" : "inset-4 gap-4 border-2 p-6 @max-[200px]:inset-2.5 @max-[200px]:gap-2 @max-[200px]:p-2.5",
+        )}
         style={{ borderColor: book.cloth.foil }}
       >
-        <div className={cn("line-clamp-4 font-semibold [text-shadow:0_1px_1px_rgba(0,0,0,0.5)]", small ? "text-[9px] leading-tight" : "text-2xl leading-tight")}>{book.title}</div>
+        <div className={cn("line-clamp-4 font-semibold [text-shadow:0_1px_1px_rgba(0,0,0,0.5)]", small ? "text-[9px] leading-tight" : "text-2xl leading-tight @max-[200px]:text-lg")}>{book.title}</div>
         {!small && (
           <>
-            <div aria-hidden className="w-20 border-t border-current" />
-            <div className="line-clamp-2 text-base italic">{book.author}</div>
+            <div aria-hidden className="w-20 border-t border-current @max-[200px]:w-12" />
+            <div className="line-clamp-2 text-base italic @max-[200px]:text-sm">{book.author}</div>
           </>
         )}
       </div>

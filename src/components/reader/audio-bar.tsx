@@ -26,7 +26,7 @@ export function AudioBar({ audio, onClose }: { audio: Audiobook; onClose: () => 
   const nextRate = SPEEDS[(SPEEDS.indexOf(audio.rate as (typeof SPEEDS)[number]) + 1) % SPEEDS.length];
 
   return (
-    <footer aria-label="Audiobook" className="absolute inset-x-0 bottom-0 z-20 px-[max(1rem,4vw)] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <footer aria-label="Audiobook" className="absolute inset-x-0 bottom-0 z-20 pr-[max(1rem,4vw,calc(env(safe-area-inset-right)+0.5rem))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(1rem,4vw,calc(env(safe-area-inset-left)+0.5rem))] short:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       {/* The status sits inside the player's own surface, so it never lands on the book's last line as bare text. */}
       <div className="mx-auto max-w-xl rounded-xl border border-border bg-popover shadow-sm shadow-black/5">
         {note && <p className="truncate border-b border-border px-3 py-1.5 text-center text-xs leading-4 text-muted-foreground">{note}</p>}
