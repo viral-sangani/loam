@@ -5,7 +5,6 @@ import { useQuery } from "convex/react";
 import { ChevronLeft, ChevronRight, Ellipsis, Headphones, LogOut, Plus, Trash2, X } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import { ReviewDesk } from "@/components/shelf/review-desk";
-import { cn } from "@/lib/utils";
 import { createRoom, type RoomController, type RoomState } from "./engine";
 import { useMedia, useViewport, type LibraryProps } from "./library";
 import { duration, progressLabel, readLabel, statusLine, toShelfBook, type ShelfBook } from "./model";
