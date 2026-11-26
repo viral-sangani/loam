@@ -70,7 +70,8 @@ async function ensureModel() {
  * local-file access only, must be a plain audio container, and is then decoded with that demuxer forced.
  */
 const AUDIO_DEMUXERS = new Set(["mp3", "mov", "mp4", "m4a", "ogg", "wav", "flac", "aac", "matroska", "webm"]);
-const SAFE = ["-protocol_whitelist", "file"];
+// Local files only, and only audio demuxers, both when probing and when decoding.
+const SAFE = ["-protocol_whitelist", "file", "-format_whitelist", [...AUDIO_DEMUXERS].join(",")];
 
 async function probe(file) {
   const out = JSON.parse(
@@ -152,7 +153,10 @@ async function processBook(bookId, title) {
     log(`Done: ${Math.round(coverage * 100)}% of the book's words matched the audio`);
   } catch (e) {
     console.error(e);
-    await update({ status: "error", stage: "Failed", error: String(e.message ?? e).slice(0, 500) }).catch(() => {});
+    // Details stay in this log; the app only shows a generic message (ffmpeg output can include local paths).
+    const unsupported = /Not a supported audio file|Invalid data/.test(String(e.message ?? e));
+    const error = unsupported ? "That doesn't look like a supported audio file." : "Couldn't process the audio.";
+    await update({ status: "error", stage: "Failed", error }).catch(() => {});
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

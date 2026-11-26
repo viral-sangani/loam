@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { vAudioFile, vProgress } from "./schema";
 
 async function requireUser(ctx: QueryCtx | MutationCtx) {
@@ -32,7 +32,10 @@ export const registerUpload = mutation({
   args: { storageId: v.id("_storage") },
   handler: async (ctx, { storageId }) => {
     const userId = await requireUser(ctx);
-    if (!(await ctx.db.system.get(storageId))) throw new ConvexError("File not found");
+    // Only fresh uploads can be registered: the uploader does it right away, and an ID learned later
+    // (e.g. from a file URL) can't be used to claim someone else's file.
+    const file = await ctx.db.system.get(storageId);
+    if (!file || Date.now() - file._creationTime > 10 * 60_000) throw new ConvexError("File not found");
     const existing = await ctx.db
       .query("uploads")
       .withIndex("by_storage", (q) => q.eq("storageId", storageId))
@@ -243,5 +246,28 @@ export const sectionTerms = query({
       .withIndex("by_book", (q) => q.eq("bookId", bookId).eq("section", section))
       .collect();
     return rows.map((t) => ({ _id: t._id, para: t.para, term: t.term }));
+  },
+});
+
+/** One-off: record owners for files of books created before the `uploads` table existed. */
+export const backfillUploads = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let added = 0;
+    for (const book of await ctx.db.query("books").collect()) {
+      const ids = [book.epub, book.cover, ...(book.audio?.files.map((f) => f.storageId) ?? [])];
+      for (const storageId of ids) {
+        if (!storageId) continue;
+        const existing = await ctx.db
+          .query("uploads")
+          .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+          .unique();
+        if (!existing) {
+          await ctx.db.insert("uploads", { storageId, userId: book.userId, bookId: book._id });
+          added++;
+        }
+      }
+    }
+    return added;
   },
 });
