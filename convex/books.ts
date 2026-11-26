@@ -2,10 +2,10 @@ import { ConvexError, v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { vAudioFile, vProgress } from "./schema";
 
-async function requireUser(ctx: QueryCtx | MutationCtx) {
+export async function requireUser(ctx: QueryCtx | MutationCtx) {
   const userId = await getAuthUserId(ctx);
   if (!userId) throw new ConvexError("Not signed in");
   return userId;
@@ -86,10 +86,23 @@ export const list = query({
         _id: b._id,
         title: b.title,
         author: b.author,
+        description: b.description ?? null,
+        wordCount: b.wordCount,
+        addedAt: b.addedAt,
+        openedAt: b.openedAt ?? null,
         progress: b.progress ?? null,
         coverUrl: b.cover ? await ctx.storage.getUrl(b.cover) : null,
         terms: b.terms,
-        audio: b.audio ? { status: b.audio.status, progress: b.audio.progress, stage: b.audio.stage, error: b.audio.error } : null,
+        audio: b.audio
+          ? {
+              status: b.audio.status,
+              progress: b.audio.progress,
+              stage: b.audio.stage,
+              error: b.audio.error,
+              coverage: b.audio.coverage ?? null,
+              durationMs: b.audio.files.reduce((n, f) => n + (f.durationMs ?? 0), 0) || null,
+            }
+          : null,
       })),
     );
   },
@@ -123,6 +136,7 @@ export const create = mutation({
     epub: v.id("_storage"),
     cover: v.optional(v.id("_storage")),
     wordCount: v.number(),
+    description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
@@ -146,7 +160,7 @@ export const addSections = mutation({
   },
   handler: async (ctx, { bookId, sections }) => {
     await ownBook(ctx, bookId);
-    for (const s of sections) await ctx.db.insert("sections", { bookId, ...s });
+    for (const s of sections) await ctx.db.insert("sections", { bookId, ...s, words: countWords(s.paragraphs) });
   },
 });
 
@@ -164,7 +178,7 @@ export const remove = mutation({
     const book = await ownBook(ctx, bookId);
     const files = [book.epub, book.cover, ...(book.audio?.files.map((f) => f.storageId) ?? [])];
     for (const f of files) if (f) await deleteOwnFile(ctx, book.userId, f);
-    for (const table of ["sections", "timings", "terms", "briefs"] as const) {
+    for (const table of ["sections", "timings", "terms", "briefs", "marks", "asks", "sectionSummaries", "recaps"] as const) {
       const rows = await ctx.db
         .query(table)
         .withIndex("by_book", (q) => q.eq("bookId", bookId))
@@ -249,3 +263,115 @@ export const sectionTerms = query({
   },
 });
 
+const countWords = (paragraphs: string[]) => paragraphs.reduce((n, p) => n + (p.match(/\S+/g)?.length ?? 0), 0);
+
+/** Fill in the publisher's blurb (for books added before descriptions were stored). */
+export const setDescription = mutation({
+  args: { bookId: v.id("books"), description: v.string() },
+  handler: async (ctx, { bookId, description }) => {
+    await ownBook(ctx, bookId);
+    await ctx.db.patch(bookId, { description: description.trim().slice(0, 4000) || undefined });
+  },
+});
+
+/** The book's shape for the reading map: each section's length in words. */
+export const outline = query({
+  args: { bookId: v.id("books") },
+  handler: async (ctx, { bookId }) => {
+    await ownBook(ctx, bookId);
+    const sections = await ctx.db
+      .query("sections")
+      .withIndex("by_book", (q) => q.eq("bookId", bookId))
+      .collect();
+    return sections.map((s) => ({ index: s.index, words: s.words ?? countWords(s.paragraphs), paragraphs: s.paragraphs.length }));
+  },
+});
+
+/** The opening of the book's text, for reading a little before starting it. */
+export const preview = query({
+  args: { bookId: v.id("books"), words: v.optional(v.number()) },
+  handler: async (ctx, { bookId, words = 1200 }) => {
+    await ownBook(ctx, bookId);
+    const sections = await ctx.db
+      .query("sections")
+      .withIndex("by_book", (q) => q.eq("bookId", bookId))
+      .take(40);
+    const out: { section: number; para: number; text: string }[] = [];
+    let n = 0;
+    for (const s of sections) {
+      // Skip title pages, contents and the like.
+      if ((s.words ?? countWords(s.paragraphs)) < 120) continue;
+      for (const [i, p] of s.paragraphs.entries()) {
+        out.push({ section: s.index, para: i, text: p });
+        n += p.match(/\S+/g)?.length ?? 0;
+        if (n >= Math.min(words, 4000)) return out;
+      }
+    }
+    return out;
+  },
+});
+
+/** Counts for the shelf: highlights, notes, questions, looked-up terms, recap. */
+export const extras = query({
+  args: { bookId: v.id("books") },
+  handler: async (ctx, { bookId }) => {
+    await ownBook(ctx, bookId);
+    const marks = await ctx.db
+      .query("marks")
+      .withIndex("by_book", (q) => q.eq("bookId", bookId))
+      .collect();
+    const asks = await ctx.db
+      .query("asks")
+      .withIndex("by_book", (q) => q.eq("bookId", bookId))
+      .collect();
+    const briefs = await ctx.db
+      .query("briefs")
+      .withIndex("by_book", (q) => q.eq("bookId", bookId))
+      .collect();
+    const terms = await ctx.db
+      .query("terms")
+      .withIndex("by_book", (q) => q.eq("bookId", bookId))
+      .collect();
+    const recap = await ctx.db
+      .query("recaps")
+      .withIndex("by_book", (q) => q.eq("bookId", bookId))
+      .order("desc")
+      .first();
+    return {
+      highlights: marks.length,
+      notes: marks.filter((m) => m.note).length,
+      questions: asks.length,
+      terms: terms.length,
+      lookedUp: briefs.filter((b) => b.lookedUpAt).length,
+      recap: recap?.status === "ready",
+    };
+  },
+});
+
+/** One-off: store word counts on sections uploaded before they were kept. */
+export const backfillWords = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let n = 0;
+    for await (const s of ctx.db.query("sections")) {
+      if (s.words === undefined) {
+        await ctx.db.patch(s._id, { words: countWords(s.paragraphs) });
+        n++;
+      }
+    }
+    return n;
+  },
+});
+
+/** Where every "learn more" term sits, for the reading map. */
+export const termPositions = query({
+  args: { bookId: v.id("books") },
+  handler: async (ctx, { bookId }) => {
+    await ownBook(ctx, bookId);
+    const rows = await ctx.db
+      .query("terms")
+      .withIndex("by_book", (q) => q.eq("bookId", bookId))
+      .collect();
+    return rows.map((t) => ({ section: t.section, para: t.para }));
+  },
+});

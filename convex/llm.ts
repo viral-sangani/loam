@@ -3,7 +3,7 @@
 const BASE_URL = process.env.LLM_BASE_URL ?? "https://models.dehold.co/v1";
 const MODEL = process.env.LLM_MODEL ?? "gpt-6-luna";
 
-export async function chatJSON<T>(system: string, user: string, maxTokens = 1500): Promise<T> {
+async function chat(system: string, user: string, maxTokens: number, json: boolean): Promise<string> {
   const key = process.env.DEHOLD_API_KEY;
   if (!key) throw new Error("DEHOLD_API_KEY is not set on the Convex deployment");
   const res = await fetch(`${BASE_URL}/chat/completions`, {
@@ -12,7 +12,7 @@ export async function chatJSON<T>(system: string, user: string, maxTokens = 1500
     body: JSON.stringify({
       model: MODEL,
       max_tokens: maxTokens,
-      response_format: { type: "json_object" },
+      ...(json ? { response_format: { type: "json_object" } } : {}),
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -21,8 +21,16 @@ export async function chatJSON<T>(system: string, user: string, maxTokens = 1500
   });
   if (!res.ok) throw new Error(`Model gateway ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const text = body.choices?.[0]?.message?.content ?? "";
-  return parseJSON<T>(text);
+  return body.choices?.[0]?.message?.content ?? "";
+}
+
+export async function chatJSON<T>(system: string, user: string, maxTokens = 1500): Promise<T> {
+  return parseJSON<T>(await chat(system, user, maxTokens, true));
+}
+
+/** A plain-text (Markdown) reply. */
+export async function chatText(system: string, user: string, maxTokens = 1200): Promise<string> {
+  return (await chat(system, user, maxTokens, false)).trim();
 }
 
 /** Tolerates code fences or chatter around the JSON object. */

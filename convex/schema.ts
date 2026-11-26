@@ -7,6 +7,25 @@ export const vProgress = v.object({
   chapter: v.union(v.string(), v.null()),
 });
 
+/** A place in the book: a section (spine index) and a paragraph in it, as split by src/lib/book-text.ts. */
+export const vPos = v.object({ section: v.number(), para: v.number() });
+
+/** A stretch of text, by word: from (startPara, startWord) to (endPara, endWord), inclusive, in one section. */
+export const vAnchor = v.object({
+  section: v.number(),
+  startPara: v.number(),
+  startWord: v.number(),
+  endPara: v.number(),
+  endWord: v.number(),
+});
+
+/** Spaced review: when an item is next due, and how many times it has been kept. */
+const review = {
+  dueAt: v.optional(v.number()),
+  reviewStep: v.optional(v.number()),
+  reviewDone: v.optional(v.boolean()),
+};
+
 export const vAudioFile = v.object({
   storageId: v.id("_storage"),
   name: v.string(),
@@ -35,6 +54,8 @@ export default defineSchema({
     openedAt: v.optional(v.number()),
     progress: v.optional(vProgress),
     wordCount: v.number(),
+    /** The publisher's blurb from the EPUB, as plain text. */
+    description: v.optional(v.string()),
     /** Finding "learn more" words with the AI, one section at a time. */
     terms: v.object({
       status: v.union(v.literal("waiting"), v.literal("running"), v.literal("done"), v.literal("error")),
@@ -62,6 +83,8 @@ export default defineSchema({
     bookId: v.id("books"),
     index: v.number(), // spine index
     paragraphs: v.array(v.string()),
+    /** Words in the section, for the reading map. */
+    words: v.optional(v.number()),
   }).index("by_book", ["bookId", "index"]),
 
   /** When each word of a section is spoken: one start time (ms) per word, -1 when not narrated. */
@@ -85,6 +108,10 @@ export default defineSchema({
   briefs: defineTable({
     termId: v.id("terms"),
     bookId: v.id("books"),
+    /** Who looked it up and when, for the notebook and the daily review. */
+    userId: v.optional(v.id("users")),
+    lookedUpAt: v.optional(v.number()),
+    ...review,
     status: v.union(v.literal("pending"), v.literal("ready"), v.literal("error")),
     error: v.optional(v.string()),
     data: v.optional(
@@ -102,5 +129,56 @@ export default defineSchema({
     ),
   })
     .index("by_term", ["termId"])
-    .index("by_book", ["bookId"]),
+    .index("by_book", ["bookId"])
+    .index("by_user_due", ["userId", "dueAt"]),
+
+  /** Highlights, with an optional note. */
+  marks: defineTable({
+    bookId: v.id("books"),
+    userId: v.id("users"),
+    anchor: vAnchor,
+    /** The highlighted text, as it reads. */
+    quote: v.string(),
+    color: v.optional(v.string()),
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+    ...review,
+  })
+    .index("by_book", ["bookId", "anchor.section"])
+    .index("by_user_due", ["userId", "dueAt"]),
+
+  /** Questions to the AI: about a selected passage, or about the whole book so far. */
+  asks: defineTable({
+    bookId: v.id("books"),
+    userId: v.id("users"),
+    kind: v.union(v.literal("explain"), v.literal("define"), v.literal("simplify"), v.literal("ask"), v.literal("book")),
+    question: v.string(),
+    /** The selected passage (passage questions). */
+    anchor: v.optional(vAnchor),
+    quote: v.optional(v.string()),
+    /** Where the reader was (book questions); nothing after it is used, to avoid spoilers. */
+    position: v.optional(vPos),
+    status: v.union(v.literal("pending"), v.literal("ready"), v.literal("error")),
+    /** Markdown. Cites paragraphs as [¶section.para]; the key answer is wrapped in ==…== once. */
+    answer: v.optional(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_book", ["bookId"]),
+
+  /** A short summary of each section, made once and reused by recaps. */
+  sectionSummaries: defineTable({
+    bookId: v.id("books"),
+    section: v.number(),
+    summary: v.string(),
+  }).index("by_book", ["bookId", "section"]),
+
+  /** "The story so far", up to a reading position. */
+  recaps: defineTable({
+    bookId: v.id("books"),
+    upTo: vPos,
+    status: v.union(v.literal("pending"), v.literal("ready"), v.literal("error")),
+    text: v.optional(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_book", ["bookId"]),
 });

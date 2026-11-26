@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { ownBook } from "./books";
+import { DAY } from "./text";
 import { chatJSON } from "./llm";
 
 const UA = "Loam/0.1 (personal reading app)";
@@ -12,14 +13,20 @@ export const request = mutation({
   handler: async (ctx, { termId }) => {
     const term = await ctx.db.get(termId);
     if (!term) throw new Error("Term not found");
-    await ownBook(ctx, term.bookId);
+    const book = await ownBook(ctx, term.bookId);
     const existing = await ctx.db
       .query("briefs")
       .withIndex("by_term", (q) => q.eq("termId", termId))
       .unique();
-    if (existing && existing.status !== "error") return;
+    const now = Date.now();
+    // Looking a term up puts it in the notebook, and in the daily review from tomorrow.
+    const lookedUp = { userId: book.userId, lookedUpAt: now, ...(existing?.dueAt ? {} : { dueAt: now + DAY, reviewStep: 0 }) };
+    if (existing && existing.status !== "error") {
+      await ctx.db.patch(existing._id, lookedUp);
+      return;
+    }
     if (existing) await ctx.db.delete(existing._id);
-    const briefId = await ctx.db.insert("briefs", { termId, bookId: term.bookId, status: "pending" });
+    const briefId = await ctx.db.insert("briefs", { termId, bookId: term.bookId, status: "pending", ...lookedUp, dueAt: now + DAY, reviewStep: 0 });
     await ctx.scheduler.runAfter(0, internal.briefs.build, { briefId });
   },
 });

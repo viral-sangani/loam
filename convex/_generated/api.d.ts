@@ -8,11 +8,17 @@
  * @module
  */
 
+import type * as asks from "../asks.js";
 import type * as auth from "../auth.js";
 import type * as books from "../books.js";
 import type * as briefs from "../briefs.js";
 import type * as llm from "../llm.js";
+import type * as marks from "../marks.js";
+import type * as notebook from "../notebook.js";
+import type * as recaps from "../recaps.js";
+import type * as review from "../review.js";
 import type * as terms from "../terms.js";
+import type * as text from "../text.js";
 import type * as users from "../users.js";
 import type * as worker from "../worker.js";
 
@@ -23,11 +29,17 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  asks: typeof asks;
   auth: typeof auth;
   books: typeof books;
   briefs: typeof briefs;
   llm: typeof llm;
+  marks: typeof marks;
+  notebook: typeof notebook;
+  recaps: typeof recaps;
+  review: typeof review;
   terms: typeof terms;
+  text: typeof text;
   users: typeof users;
   worker: typeof worker;
 }>;

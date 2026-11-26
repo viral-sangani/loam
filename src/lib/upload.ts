@@ -31,10 +31,23 @@ async function readEpub(file: File) {
       s.unload();
       if (paragraphs.length) sections.push({ index: s.index, paragraphs });
     }
-    return { title: metadata.title?.trim() ?? "", author: metadata.creator?.trim() ?? "", cover, sections };
+    return {
+      title: metadata.title?.trim() ?? "",
+      author: metadata.creator?.trim() ?? "",
+      description: plainText(metadata.description ?? ""),
+      cover,
+      sections,
+    };
   } finally {
     book.destroy();
   }
+}
+
+/** EPUB blurbs are often HTML; keep just the words. */
+export function plainText(html: string) {
+  if (!html.trim()) return "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return (doc.body.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 4000);
 }
 
 async function uploadFile(convex: ConvexReactClient, file: Blob): Promise<Id<"_storage">> {
@@ -62,6 +75,7 @@ export async function addEpub(convex: ConvexReactClient, file: File) {
     epub,
     cover,
     wordCount,
+    description: meta.description || undefined,
   });
   // Send the text in batches that stay well under Convex's argument size limit.
   let batch: Section[] = [];
