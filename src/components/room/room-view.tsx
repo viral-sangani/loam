@@ -13,12 +13,6 @@ import { PaperFade, Pill, PreviewText, ViewToggle, bookFacts, readHref, useHando
 import { useExtras, usePreview } from "./use-book-details";
 
 const INITIAL: RoomState = { ready: false, stage: "room", bookId: null, face: "front", cardOut: false, spread: 0, spreads: 0, hover: null, zone: null, overflow: 0 };
-const FACES = [
-  ["front", "Front"],
-  ["spine", "Spine"],
-  ["back", "Back"],
-  ["edge", "Fore-edge"],
-] as const;
 
 /** Waits (briefly) for Literata so the covers and pages aren't drawn in a fallback font. */
 function fontsReady() {
@@ -259,27 +253,6 @@ export function RoomView(p: LibraryProps & { onFallback: (reason: "webgl" | "los
           <p className="line-clamp-2 text-base leading-snug font-semibold">{hovered.title}</p>
           {hovered.author && <p className="mt-1 truncate text-sm text-[var(--lib-ink-soft)] italic">{hovered.author}</p>}
           <p className="sc mt-2 text-sm leading-snug text-[var(--lib-brass)]">{statusLine(hovered)}</p>
-        </div>
-      )}
-
-      {/* faces */}
-      {rs.stage === "held" && held && (
-        <div role="group" aria-label="Turn the book to" className="absolute top-1/2 right-2 z-20 flex -translate-y-1/2 flex-col sm:right-4">
-          {FACES.map(([f, label]) => {
-            const on = rs.face === f;
-            return (
-              <button
-                key={f}
-                type="button"
-                aria-pressed={on}
-                onClick={() => call("setFace", f)}
-                className={cn("sc flex min-h-11 cursor-pointer items-center justify-end gap-3 rounded-full px-2 text-base transition-colors duration-200", on ? "text-[#e7c983]" : "text-[rgba(239,228,207,0.75)] hover:text-[var(--lib-ink)]")}
-              >
-                <span className="max-sm:sr-only">{label}</span>
-                <span aria-hidden className={cn("rounded-full bg-current transition-all duration-200", on ? "size-2.5" : "size-1.5")} />
-              </button>
-            );
-          })}
         </div>
       )}
 
