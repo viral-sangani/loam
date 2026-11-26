@@ -1,53 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { Headphones, LogOut, Plus, Sprout, X } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { SignIn } from "@/components/auth/sign-in";
-import { ReviewDesk } from "@/components/shelf/review-desk";
-import { Button } from "@/components/ui/button";
+import { FlatView } from "@/components/room/flat-view";
+import type { LibraryProps } from "@/components/room/library";
+import { useLibraryView } from "@/components/room/view-mode";
 import { useDescriptionBackfill } from "@/lib/describe";
 import { addAudiobook, addEpub } from "@/lib/upload";
 import { cn } from "@/lib/utils";
+import "@/components/room/room.css";
 
-type Book = FunctionReturnType<typeof api.books.list>[number];
-
-function Cover({ book, className }: { book: Book; className?: string }) {
-  return (
-    <div className={cn("shrink-0 overflow-hidden rounded-[3px] bg-secondary shadow-[0_1px_2px_oklch(0.3_0.04_55/0.25),0_6px_14px_-8px_oklch(0.3_0.04_55/0.4)]", className)}>
-      {book.coverUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={book.coverUrl} alt="" className="size-full object-cover" />
-      ) : (
-        <div className="flex size-full items-center justify-center p-1 text-center font-serif text-[9px] leading-tight text-muted-foreground">
-          {book.title}
-        </div>
-      )}
+/** The 3D room: three.js and the scene load only in the browser, and only when the room is shown. */
+const RoomView = dynamic(() => import("@/components/room/room-view").then((m) => m.RoomView), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 z-10 flex items-center justify-center bg-[var(--lib-scene)]">
+      <p className="sc-wide text-sm text-[rgba(239,228,207,0.8)]">Lighting the lamp</p>
     </div>
-  );
-}
-
-/** One quiet line about the background work on a book. */
-function Status({ book, uploading }: { book: Book; uploading: number | null }) {
-  const parts: string[] = [];
-  if (uploading !== null) parts.push(`Uploading audio ${Math.round(uploading * 100)}%`);
-  else if (book.audio) {
-    const a = book.audio;
-    if (a.status === "ready") parts.push("Audio synced");
-    else if (a.status === "error") parts.push("Audio sync failed");
-    else if (a.status === "queued") parts.push("Audio waiting to sync");
-    else parts.push(`Syncing audio ${Math.round(a.progress * 100)}%`);
-  }
-  const t = book.terms;
-  if (t.status === "running" && t.total) parts.push(`Finding words ${Math.round((t.done / t.total) * 100)}%`);
-  if (!parts.length) return null;
-  return <p className="mt-1 truncate text-[11px] text-muted-foreground">{parts.join(" · ")}</p>;
-}
+  ),
+});
 
 export function Shelf() {
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -64,7 +40,6 @@ function Library() {
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [audioFor, setAudioFor] = useState<Id<"books"> | null>(null);
   const [uploads, setUploads] = useState<Record<string, number>>({});
   const inputRef = useRef<HTMLInputElement>(null);
@@ -140,16 +115,48 @@ function Library() {
     };
   }, [add]);
 
-  const empty = books !== undefined && books.length === 0;
+  const { view, setView, canRoom } = useLibraryView();
+  // Set when the room can't run here after all (no WebGL, or the GPU dropped it): the list takes over.
+  const [fallback, setFallback] = useState<"webgl" | "lost" | null>(null);
+
+  const lib: LibraryProps = {
+    books,
+    uploads,
+    busy,
+    error,
+    addBooks: () => inputRef.current?.click(),
+    addAudio: (bookId) => {
+      setAudioFor(bookId as Id<"books">);
+      audioRef.current?.click();
+    },
+    remove: async (bookId) => {
+      try {
+        await removeBook({ bookId: bookId as Id<"books"> });
+      } catch (e) {
+        console.error(e);
+        setError("Couldn't remove that book.");
+      }
+    },
+    signOut: () => void signOut(),
+    view,
+    setView: (v) => {
+      setFallback(null);
+      setView(v);
+    },
+    canRoom: canRoom && !fallback,
+  };
+  const room = view === "room" && canRoom && !fallback;
 
   return (
-    <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-16">
+    <div className="loam-lib relative z-10 flex min-h-dvh w-full flex-1 flex-col">
       <input
         ref={inputRef}
         type="file"
         accept=".epub,application/epub+zip"
         multiple
         className="sr-only"
+        tabIndex={-1}
+        aria-hidden
         onChange={(e) => {
           if (e.target.files) void add(e.target.files);
           e.target.value = "";
@@ -161,6 +168,8 @@ function Library() {
         accept="audio/*,.mp3,.m4a,.m4b"
         multiple
         className="sr-only"
+        tabIndex={-1}
+        aria-hidden
         data-testid="audio-input"
         onChange={(e) => {
           if (e.target.files && audioFor) void attachAudio(audioFor, Array.from(e.target.files));
@@ -168,136 +177,24 @@ function Library() {
         }}
       />
 
+      {room ? (
+        <RoomView {...lib} onFallback={setFallback} />
+      ) : (
+        <FlatView
+          {...lib}
+          notice={fallback === "webgl" ? "This browser can't draw the 3D room, so here is the list." : fallback === "lost" ? "The 3D room stopped drawing, so here is the list." : null}
+        />
+      )}
+
       <div
+        aria-hidden
         className={cn(
-          "pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm transition-opacity",
+          "pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[rgba(20,16,12,0.82)] backdrop-blur-sm transition-opacity duration-200",
           dragging ? "opacity-100" : "opacity-0",
         )}
       >
-        <p className="font-serif text-2xl">Place it on the shelf</p>
+        <p className="text-2xl">Place it on the shelf</p>
       </div>
-
-      <header className="mb-8 flex items-center justify-between sm:mb-14">
-        <div className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <Sprout className="size-4" />
-          </span>
-          <span className="font-serif text-2xl tracking-tight">Loam</span>
-        </div>
-        <div className="flex items-center gap-1">
-          {!empty && books && (
-            <Button variant="ghost" size="sm" className="text-muted-foreground pointer-coarse:h-11 pointer-coarse:px-3" onClick={() => inputRef.current?.click()} disabled={busy}>
-              <Plus /> {busy ? "Shelving…" : "Add"}
-            </Button>
-          )}
-          <Button variant="ghost" size="icon-sm" aria-label="Sign out" title="Sign out" className="text-muted-foreground pointer-coarse:size-11" onClick={() => void signOut()}>
-            <LogOut />
-          </Button>
-        </div>
-      </header>
-
-      <main className="flex-1">
-        {empty && (
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="flex w-full flex-col items-center gap-3 rounded-3xl border border-dashed border-border px-6 py-16 text-center sm:px-8 sm:py-24 transition-colors hover:border-primary/50 hover:bg-card/60"
-          >
-            <span className="font-serif text-2xl">{busy ? "Shelving…" : "Your shelf is empty"}</span>
-            <span className="text-sm text-muted-foreground">
-              <span className="pointer-coarse:hidden">Drop an EPUB here, or </span>
-              <span className="text-primary underline underline-offset-4">
-                <span className="pointer-coarse:hidden">choose one</span>
-                <span className="hidden pointer-coarse:inline">Choose an EPUB</span>
-              </span>
-            </span>
-          </button>
-        )}
-
-        {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
-
-        {!empty && <ReviewDesk />}
-
-        {books && books.length > 0 && (
-          <ul className="space-y-1">
-            {books.map((b) => {
-              const pct = b.progress?.percent;
-              return (
-                <li key={b._id} className="group relative">
-                  <Link
-                    href={`/read/${b._id}`}
-                    className="flex items-center gap-4 rounded-2xl py-3 pr-24 pl-2 transition-colors hover:bg-card/70 sm:gap-5 sm:px-3 sm:pr-24"
-                  >
-                    <Cover book={b} className="h-[72px] w-12" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-serif text-lg leading-snug">{b.title}</p>
-                      <p className="truncate text-sm text-muted-foreground">{b.author}</p>
-                      <div className="mt-2 flex items-center gap-3">
-                        <div className="h-px max-w-40 flex-1 bg-border">
-                          <div className="h-px bg-primary" style={{ width: `${(pct ?? 0) * 100}%` }} />
-                        </div>
-                        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                          {b.progress ? (pct != null ? `${Math.round(pct * 100)}%` : "Started") : "New"}
-                        </span>
-                      </div>
-                      <Status book={b} uploading={uploads[b._id] ?? null} />
-                    </div>
-                  </Link>
-                  <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5 sm:right-3">
-                    {confirmId === b._id ? (
-                      <div className="flex items-center gap-1 rounded-full bg-card px-1 py-0.5 text-xs shadow-sm">
-                        <span className="px-2 text-muted-foreground">Remove?</span>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={async () => {
-                            await removeBook({ bookId: b._id });
-                            setConfirmId(null);
-                          }}
-                        >
-                          Remove
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setConfirmId(null)}>
-                          Keep
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label={b.audio ? `Replace audiobook for ${b.title}` : `Add audiobook for ${b.title}`}
-                          title={b.audio ? "Replace audiobook" : "Add audiobook"}
-                          disabled={b._id in uploads}
-                          onClick={() => {
-                            setAudioFor(b._id);
-                            audioRef.current?.click();
-                          }}
-                          className={cn(
-                            "text-muted-foreground transition-opacity pointer-coarse:size-11",
-                            b.audio ? "opacity-60" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-60",
-                          )}
-                        >
-                          <Headphones />
-                        </Button>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label={`Remove ${b.title}`}
-                          onClick={() => setConfirmId(b._id)}
-                          className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-60"
-                        >
-                          <X />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </main>
     </div>
   );
 }
