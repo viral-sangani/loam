@@ -124,6 +124,9 @@ export const get = query({
       epub: book.epub,
       epubUrl: await ctx.storage.getUrl(book.epub),
       progress: book.progress ?? null,
+      /** When it was last opened before now (saving progress updates it). */
+      openedAt: book.openedAt ?? null,
+      description: book.description ?? null,
       audio: book.audio ? { ...book.audio, files: audioFiles } : null,
     };
   },
