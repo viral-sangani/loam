@@ -6,7 +6,8 @@
  *   npm run aligner -- --once
  *
  * Needs ffmpeg and whisper.cpp (`brew install ffmpeg whisper-cpp`). Downloads the whisper
- * base.en model (~150 MB) on first run. Reads NEXT_PUBLIC_CONVEX_URL and WORKER_SECRET from .env.local.
+ * base.en model (~150 MB) on first run. Reads ALIGNER_CONVEX_URL (falls back to
+ * NEXT_PUBLIC_CONVEX_URL) and WORKER_SECRET from .env.local.
  */
 import { spawn } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
@@ -19,10 +20,11 @@ import { ConvexHttpClient } from "convex/browser";
 import { anyApi } from "convex/server";
 import { align, tokenize } from "./align.mjs";
 
-const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+// ALIGNER_CONVEX_URL points the aligner at the live (prod) deployment; otherwise it uses the dev one.
+const url = process.env.ALIGNER_CONVEX_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL;
 const secret = process.env.WORKER_SECRET;
 if (!url || !secret) {
-  console.error("Set NEXT_PUBLIC_CONVEX_URL and WORKER_SECRET (they live in .env.local).");
+  console.error("Set ALIGNER_CONVEX_URL (or NEXT_PUBLIC_CONVEX_URL) and WORKER_SECRET (they live in .env.local).");
   process.exit(1);
 }
 const MODEL_DIR = path.join(os.homedir(), ".cache", "loam-whisper");

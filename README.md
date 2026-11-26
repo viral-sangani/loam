@@ -44,6 +44,14 @@ npm run aligner   # times audiobooks against their books (needs: brew install ff
 The aligner downloads the whisper `base.en` model (~150 MB) on first run and processes about
 45× faster than real time on Apple Silicon (a 10-hour audiobook in ~15 minutes).
 
+## Deploy
+
+Live at https://books.viralsangani.me. Vercel builds every push to `master` on the fork with
+`npx convex deploy --cmd 'npm run build'` (see `vercel.json`), which pushes the Convex functions to
+the production deployment and builds the app against it. Vercel needs `CONVEX_DEPLOY_KEY` (a prod
+deploy key). The aligner still runs on your machine; set `ALIGNER_CONVEX_URL` in `.env.local` to the
+prod Convex URL so it serves the live site.
+
 ## Reader shortcuts
 
 `← →` / `Space` pages · `[ ]` chapters · `C` contents · `A` audiobook · `K` play/pause · `−` `=` text
