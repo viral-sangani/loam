@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { vAudioFile, vProgress } from "./schema";
 
 async function requireUser(ctx: QueryCtx | MutationCtx) {
@@ -249,25 +249,3 @@ export const sectionTerms = query({
   },
 });
 
-/** One-off: record owners for files of books created before the `uploads` table existed. */
-export const backfillUploads = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    let added = 0;
-    for (const book of await ctx.db.query("books").collect()) {
-      const ids = [book.epub, book.cover, ...(book.audio?.files.map((f) => f.storageId) ?? [])];
-      for (const storageId of ids) {
-        if (!storageId) continue;
-        const existing = await ctx.db
-          .query("uploads")
-          .withIndex("by_storage", (q) => q.eq("storageId", storageId))
-          .unique();
-        if (!existing) {
-          await ctx.db.insert("uploads", { storageId, userId: book.userId, bookId: book._id });
-          added++;
-        }
-      }
-    }
-    return added;
-  },
-});
