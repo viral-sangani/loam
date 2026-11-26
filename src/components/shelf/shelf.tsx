@@ -2,24 +2,25 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Plus, Sprout, X } from "lucide-react";
+import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { Headphones, LogOut, Plus, Sprout, X } from "lucide-react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
+import { SignIn } from "@/components/auth/sign-in";
 import { Button } from "@/components/ui/button";
-import { addEpub, listBooks, removeBook, type Book } from "@/lib/library";
+import { addAudiobook, addEpub } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 
+type Book = FunctionReturnType<typeof api.books.list>[number];
+
 function Cover({ book, className }: { book: Book; className?: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!book.cover) return;
-    const u = URL.createObjectURL(book.cover);
-    setUrl(u); // eslint-disable-line react-hooks/set-state-in-effect -- object URL lifecycle
-    return () => URL.revokeObjectURL(u);
-  }, [book.cover]);
   return (
     <div className={cn("shrink-0 overflow-hidden rounded-[3px] bg-secondary shadow-[0_1px_2px_oklch(0.3_0.04_55/0.25),0_6px_14px_-8px_oklch(0.3_0.04_55/0.4)]", className)}>
-      {url ? (
+      {book.coverUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="size-full object-cover" />
+        <img src={book.coverUrl} alt="" className="size-full object-cover" />
       ) : (
         <div className="flex size-full items-center justify-center p-1 text-center font-serif text-[9px] leading-tight text-muted-foreground">
           {book.title}
@@ -29,22 +30,42 @@ function Cover({ book, className }: { book: Book; className?: string }) {
   );
 }
 
+/** One quiet line about the background work on a book. */
+function Status({ book, uploading }: { book: Book; uploading: number | null }) {
+  const parts: string[] = [];
+  if (uploading !== null) parts.push(`Uploading audio ${Math.round(uploading * 100)}%`);
+  else if (book.audio) {
+    const a = book.audio;
+    if (a.status === "ready") parts.push("Audio synced");
+    else if (a.status === "error") parts.push("Audio sync failed");
+    else if (a.status === "queued") parts.push("Audio waiting to sync");
+    else parts.push(`Syncing audio ${Math.round(a.progress * 100)}%`);
+  }
+  const t = book.terms;
+  if (t.status === "running" && t.total) parts.push(`Finding words ${Math.round((t.done / t.total) * 100)}%`);
+  if (!parts.length) return null;
+  return <p className="mt-1 truncate text-[11px] text-muted-foreground">{parts.join(" · ")}</p>;
+}
+
 export function Shelf() {
-  const [books, setBooks] = useState<Book[] | null>(null);
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  if (isLoading) return null;
+  return isAuthenticated ? <Library /> : <SignIn />;
+}
+
+function Library() {
+  const convex = useConvex();
+  const books = useQuery(api.books.list);
+  const removeBook = useMutation(api.books.remove);
+  const { signOut } = useAuthActions();
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [audioFor, setAudioFor] = useState<Id<"books"> | null>(null);
+  const [uploads, setUploads] = useState<Record<string, number>>({});
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const refresh = useCallback(async () => setBooks(await listBooks()), []);
-  useEffect(() => {
-    let live = true;
-    listBooks().then((b) => live && setBooks(b));
-    return () => {
-      live = false;
-    };
-  }, []);
+  const audioRef = useRef<HTMLInputElement>(null);
 
   const add = useCallback(
     async (files: FileList | File[]) => {
@@ -53,16 +74,37 @@ export function Shelf() {
       setError(null);
       setBusy(true);
       try {
-        for (const f of epubs) await addEpub(f);
+        for (const f of epubs) await addEpub(convex, f);
       } catch (e) {
         console.error(e);
         setError("Couldn't read that file. Is it a valid EPUB?");
       } finally {
         setBusy(false);
-        void refresh();
       }
     },
-    [refresh],
+    [convex],
+  );
+
+  const attachAudio = useCallback(
+    async (bookId: Id<"books">, files: File[]) => {
+      const audio = files.filter((f) => f.type.startsWith("audio/") || /\.(mp3|m4a|m4b|aac|wav|ogg|opus|flac)$/i.test(f.name));
+      if (!audio.length) return setError("Choose the audiobook's audio files (MP3, M4B, M4A…).");
+      setError(null);
+      setUploads((u) => ({ ...u, [bookId]: 0 }));
+      try {
+        await addAudiobook(convex, bookId, audio, (done, total) => setUploads((u) => ({ ...u, [bookId]: done / total })));
+      } catch (e) {
+        console.error(e);
+        setError("Couldn't upload that audio.");
+      } finally {
+        setUploads((u) => {
+          const rest = { ...u };
+          delete rest[bookId];
+          return rest;
+        });
+      }
+    },
+    [convex],
   );
 
   useEffect(() => {
@@ -95,7 +137,7 @@ export function Shelf() {
     };
   }, [add]);
 
-  const empty = books !== null && books.length === 0;
+  const empty = books !== undefined && books.length === 0;
 
   return (
     <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-16">
@@ -107,6 +149,18 @@ export function Shelf() {
         className="sr-only"
         onChange={(e) => {
           if (e.target.files) void add(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={audioRef}
+        type="file"
+        accept="audio/*,.mp3,.m4a,.m4b"
+        multiple
+        className="sr-only"
+        data-testid="audio-input"
+        onChange={(e) => {
+          if (e.target.files && audioFor) void attachAudio(audioFor, Array.from(e.target.files));
           e.target.value = "";
         }}
       />
@@ -130,9 +184,12 @@ export function Shelf() {
         <div className="flex items-center gap-1">
           {!empty && books && (
             <Button variant="ghost" size="sm" className="text-muted-foreground pointer-coarse:h-11 pointer-coarse:px-3" onClick={() => inputRef.current?.click()} disabled={busy}>
-              <Plus /> Add
+              <Plus /> {busy ? "Shelving…" : "Add"}
             </Button>
           )}
+          <Button variant="ghost" size="icon-sm" aria-label="Sign out" title="Sign out" className="text-muted-foreground pointer-coarse:size-11" onClick={() => void signOut()}>
+            <LogOut />
+          </Button>
         </div>
       </header>
 
@@ -161,10 +218,10 @@ export function Shelf() {
             {books.map((b) => {
               const pct = b.progress?.percent;
               return (
-                <li key={b.id} className="group relative">
+                <li key={b._id} className="group relative">
                   <Link
-                    href={`/read/${b.id}`}
-                    className="flex items-center gap-4 rounded-2xl py-3 pr-12 pl-2 transition-colors hover:bg-card/70 sm:gap-5 sm:px-3"
+                    href={`/read/${b._id}`}
+                    className="flex items-center gap-4 rounded-2xl py-3 pr-24 pl-2 transition-colors hover:bg-card/70 sm:gap-5 sm:px-3 sm:pr-24"
                   >
                     <Cover book={b} className="h-[72px] w-12" />
                     <div className="min-w-0 flex-1">
@@ -178,22 +235,19 @@ export function Shelf() {
                           {b.progress ? (pct != null ? `${Math.round(pct * 100)}%` : "Started") : "New"}
                         </span>
                       </div>
-                      {b.progress?.chapter && (
-                        <p className="mt-1 truncate font-serif text-xs text-muted-foreground italic">{b.progress.chapter}</p>
-                      )}
+                      <Status book={b} uploading={uploads[b._id] ?? null} />
                     </div>
                   </Link>
-                  <div className="absolute top-1/2 right-1 -translate-y-1/2 sm:right-3">
-                    {confirmId === b.id ? (
+                  <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5 sm:right-3">
+                    {confirmId === b._id ? (
                       <div className="flex items-center gap-1 rounded-full bg-card px-1 py-0.5 text-xs shadow-sm">
                         <span className="px-2 text-muted-foreground">Remove?</span>
                         <Button
                           size="sm"
                           variant="destructive"
                           onClick={async () => {
-                            await removeBook(b.id);
+                            await removeBook({ bookId: b._id });
                             setConfirmId(null);
-                            void refresh();
                           }}
                         >
                           Remove
@@ -203,15 +257,34 @@ export function Shelf() {
                         </Button>
                       </div>
                     ) : (
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`Remove ${b.title}`}
-                        onClick={() => setConfirmId(b.id)}
-                        className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-60"
-                      >
-                        <X />
-                      </Button>
+                      <>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={b.audio ? `Replace audiobook for ${b.title}` : `Add audiobook for ${b.title}`}
+                          title={b.audio ? "Replace audiobook" : "Add audiobook"}
+                          disabled={b._id in uploads}
+                          onClick={() => {
+                            setAudioFor(b._id);
+                            audioRef.current?.click();
+                          }}
+                          className={cn(
+                            "text-muted-foreground transition-opacity pointer-coarse:size-11",
+                            b.audio ? "opacity-60" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-60",
+                          )}
+                        >
+                          <Headphones />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`Remove ${b.title}`}
+                          onClick={() => setConfirmId(b._id)}
+                          className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-60"
+                        >
+                          <X />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </li>

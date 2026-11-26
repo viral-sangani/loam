@@ -8,7 +8,12 @@ import type { EpubReader } from "./use-epub-reader";
  * Keyboard shortcuts. Returns a handler for keys pressed inside the book frame,
  * whose listeners are passive, so it can't preventDefault there.
  */
-export function useReaderKeys(reader: EpubReader, togglePanel: (p: Panel) => void, closePanel: () => void) {
+export function useReaderKeys(
+  reader: Pick<EpubReader, "next" | "prev" | "goChapter" | "updatePrefs" | "prefs">,
+  togglePanel: (p: Panel) => void,
+  closePanel: () => void,
+  extra: Record<string, () => void> = {},
+) {
   const { next, prev, goChapter, updatePrefs, prefs } = reader;
   const prefsRef = useRef(prefs);
   useEffect(() => {
@@ -37,13 +42,14 @@ export function useReaderKeys(reader: EpubReader, togglePanel: (p: Panel) => voi
         "-": () => updatePrefs({ fontSize: step(FONT_STEPS, p.fontSize, -1) }),
         n: () => updatePrefs({ theme: p.theme === "light" ? "dark" : "light" }),
         "?": () => togglePanel("keys"),
+        ...extra,
       };
       const action = actions[k];
       if (!action) return;
       if (!fromBook) e.preventDefault();
       action();
     },
-    [next, prev, goChapter, updatePrefs, togglePanel, closePanel],
+    [next, prev, goChapter, updatePrefs, togglePanel, closePanel, extra],
   );
 
   useEffect(() => {

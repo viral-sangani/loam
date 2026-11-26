@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useMutation, useQuery } from "convex/react";
 import type { Book as EpubBook, Contents, EpubCFI, Location, Rendition } from "epubjs";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import {
-  getBook,
-  getBookFile,
   getLocations,
+  loadBookFile,
   loadPrefs,
   saveLocations,
   savePrefs,
-  saveProgress,
-  type Book,
   type Progress,
   type ReaderPrefs,
 } from "@/lib/library";
@@ -22,6 +22,12 @@ export type FrameEvents = {
   /** A tap, with its horizontal position as a fraction of the screen width (0 = left edge). */
   tap: (x: number) => void;
   activity: () => void;
+  /** A click or tap on the text. Return true if it was handled (e.g. it hit an underlined term). */
+  press: (contents: Contents, x: number, y: number) => boolean;
+  /** A section was laid out in the book frame (also after a re-layout). */
+  rendered: (contents: Contents) => void;
+  /** A horizontal swipe: 1 = next page, -1 = previous. */
+  swipe: (dir: 1 | -1) => void;
 };
 
 const SWIPE_PX = 40;
@@ -38,7 +44,9 @@ function applyPrefs(r: Rendition, p: ReaderPrefs) {
  * Loads a book from the shelf into `viewRef`, and owns everything about the reading position:
  * the saved spot, the current chapter, progress, and text settings.
  */
-export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | null>, events: RefObject<FrameEvents>) {
+export function useEpubReader(id: Id<"books">, viewRef: RefObject<HTMLDivElement | null>, events: RefObject<FrameEvents>) {
+  const book = useQuery(api.books.get, { bookId: id });
+  const saveProgressMutation = useMutation(api.books.saveProgress);
   const bookRef = useRef<EpubBook | null>(null);
   const rendRef = useRef<Rendition | null>(null);
   const entriesRef = useRef<Entry[]>([]);
@@ -49,7 +57,6 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
   const pendingChapter = useRef<number | null>(null);
   const stickyChapter = useRef<{ idx: number; anchor: string | null } | null>(null);
 
-  const [meta, setMeta] = useState<Book | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [toc, setToc] = useState<Entry[]>([]);
   const [chapterIdx, setChapterIdx] = useState(-1);
@@ -64,9 +71,16 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
     chapterRef.current = chapterIdx;
   }, [prefs, chapterIdx]);
 
+  // Progress is saved to Convex at most every couple of seconds while paging.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const flush = useCallback(() => {
-    if (lastProgress.current) void saveProgress(id, lastProgress.current);
-  }, [id]);
+    clearTimeout(saveTimer.current);
+    if (lastProgress.current) void saveProgressMutation({ bookId: id, progress: lastProgress.current }).catch(() => {});
+  }, [id, saveProgressMutation]);
+  const saveSoon = useCallback(() => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(flush, 1500);
+  }, [flush]);
 
   const updatePrefs = useCallback((patch: Partial<ReaderPrefs>) => {
     const p = { ...prefsRef.current, ...patch };
@@ -88,6 +102,11 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
     movedRef.current = true;
     void rendRef.current?.prev();
   }, []);
+  /** Show a position (a CFI or an href), e.g. where the audio is. Counts as the reader moving. */
+  const show = useCallback((target: string) => {
+    movedRef.current = true;
+    return rendRef.current?.display(target);
+  }, []);
   const jumpTo = useCallback((i: number) => {
     const target = entriesRef.current[i];
     if (!target) return;
@@ -97,19 +116,31 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
   }, []);
   const goChapter = useCallback((dir: 1 | -1) => jumpTo(chapterRef.current + dir), [jumpTo]);
 
+  const missing = book === null;
+  const epub = book?.epub;
+  const epubUrl = book?.epubUrl;
+  // Where the book was left, captured once: later progress saves must not re-position the reader.
+  const savedCfi = useRef<string | null>(null);
   useEffect(() => {
+    if (book && savedCfi.current === null) savedCfi.current = book.progress?.cfi ?? "";
+  }, [book]);
+
+  useEffect(() => {
+    if (missing) setStatus("missing"); // eslint-disable-line react-hooks/set-state-in-effect -- mirrors the query result
+  }, [missing]);
+
+  useEffect(() => {
+    if (!epub || !epubUrl) return;
     let cancelled = false;
     let locating: Promise<unknown> | null = null;
 
     (async () => {
-      const [record, file] = await Promise.all([getBook(id), getBookFile(id)]);
+      const data = await loadBookFile(epub, epubUrl);
       if (cancelled) return;
-      if (!record || !file) return setStatus("missing");
-      setMeta(record);
 
       const mod = await import("epubjs");
       const cfiTool: EpubCFI = new mod.EpubCFI();
-      const book = mod.default(await file.arrayBuffer());
+      const book = mod.default(data);
       bookRef.current = book;
 
       const rendition = book.renderTo(viewRef.current!, {
@@ -128,8 +159,10 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
         const doc = contents.document;
         await Promise.all([doc.fonts.load('1em "Literata"'), doc.fonts.load('italic 1em "Literata"')]).catch(() => {});
         await doc.fonts.ready;
+        if (cancelled) return;
+        events.current.rendered(contents);
         const anchor = anchorRef.current;
-        if (cancelled || !anchor || movedRef.current) return;
+        if (!anchor || movedRef.current) return;
         if (new mod.EpubCFI(anchor).spinePos === contents.sectionIndex) void rendition.display(anchor);
       });
       rendition.themes.default({
@@ -149,6 +182,12 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
         a: { color: "inherit !important", "text-decoration-color": "rgba(120,100,70,.4) !important" },
         "::selection": { background: "rgba(122,140,80,.28)" },
         img: { "max-width": "100% !important", "max-height": "90vh !important", "object-fit": "contain" },
+        // Painted with the CSS Custom Highlight API, so the book's markup (and its CFIs) never change.
+        "::highlight(loam-word)": { "background-color": "rgba(122,140,80,.32)", color: "inherit" },
+        "::highlight(loam-term)": {
+          "text-decoration": "underline dotted rgba(176,112,64,.85) 1.5px",
+          "text-underline-offset": "3px",
+        },
       });
       applyPrefs(rendition, prefsRef.current);
 
@@ -209,32 +248,39 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
         setPercent(pct);
         setPagesLeft(left);
         lastProgress.current = { cfi, percent: pct, chapter: entries[ci]?.label ?? null };
-        void saveProgress(id, lastProgress.current);
+        saveSoon();
       });
 
-      // Input from inside the iframe: keys, mouse activity, swipes and taps.
+      // Input from inside the iframe: keys, mouse activity, clicks, swipes and taps.
       rendition.on("keydown", (e: KeyboardEvent) => events.current.key(e));
       rendition.on("mousemove", () => events.current.activity());
+      let lastTouch = 0;
+      rendition.on("click", (e: MouseEvent, contents: Contents) => {
+        if (Date.now() - lastTouch < 800) return; // the click that follows a tap was handled on touchend
+        events.current.press(contents, e.clientX, e.clientY);
+      });
       let touch: { x: number; y: number; t: number } | null = null;
       rendition.on("touchstart", (e: TouchEvent) => {
         const p = e.changedTouches[0];
         touch = p ? { x: p.screenX, y: p.screenY, t: Date.now() } : null;
       });
-      rendition.on("touchend", (e: TouchEvent) => {
+      rendition.on("touchend", (e: TouchEvent, contents: Contents) => {
         const p = e.changedTouches[0];
+        lastTouch = Date.now();
         if (!touch || !p) return;
         const dx = p.screenX - touch.x;
         const dy = p.screenY - touch.y;
         const quick = Date.now() - touch.t < TAP_MS;
         touch = null;
-        if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) return (dx < 0 ? next : prev)();
+        if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) return events.current.swipe(dx < 0 ? 1 : -1);
         const selecting = !!e.view?.getSelection()?.toString();
         if (quick && Math.abs(dx) < TAP_PX && Math.abs(dy) < TAP_PX && !selecting) {
+          if (events.current.press(contents, p.clientX, p.clientY)) return;
           events.current.tap(p.screenX / window.screen.width);
         }
       });
 
-      anchorRef.current = record.progress?.cfi || null;
+      anchorRef.current = savedCfi.current || null;
       await rendition.display(anchorRef.current || undefined);
       if (cancelled) return;
       setStatus("ready");
@@ -255,7 +301,7 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
         setPercent(pct);
         if (lastProgress.current) {
           lastProgress.current = { ...lastProgress.current, percent: pct };
-          void saveProgress(id, lastProgress.current);
+          saveSoon();
         }
       }
     })().catch((err) => {
@@ -279,7 +325,7 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
       bookRef.current = null;
       anchorRef.current = null;
     };
-  }, [id, viewRef, events, next, prev, flush]);
+  }, [id, epub, epubUrl, viewRef, events, next, prev, flush, saveSoon]);
 
   // Save the spot when the tab is hidden or closed (mobile browsers often skip unload).
   useEffect(() => {
@@ -293,7 +339,7 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
   }, [flush]);
 
   return {
-    meta,
+    meta: book ?? null,
     status,
     toc,
     chapterIdx,
@@ -303,9 +349,11 @@ export function useEpubReader(id: string, viewRef: RefObject<HTMLDivElement | nu
     updatePrefs,
     next,
     prev,
+    show,
     jumpTo,
     goChapter,
     flush,
+    rendition: rendRef,
   };
 }
 

@@ -1,39 +1,94 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useConvexAuth } from "convex/react";
+import type { Contents } from "epubjs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { Id } from "@convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
+import { AudioBar } from "./audio-bar";
+import { BriefPanel } from "./brief-panel";
 import { IDLE_MS, type Panel } from "./config";
 import { ContentsPanel } from "./contents-panel";
 import { ProgressFooter } from "./progress-footer";
 import { SettingsPanel } from "./settings-panel";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { TopBar } from "./top-bar";
+import { useAudiobook } from "./use-audiobook";
 import { useEpubReader, type FrameEvents } from "./use-epub-reader";
 import { useReaderKeys } from "./use-reader-keys";
+import { useTerms } from "./use-terms";
 
 export function Reader() {
-  const { id } = useParams<{ id: string }>();
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const router = useRouter();
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) router.replace("/");
+  }, [isLoading, isAuthenticated, router]);
+  if (!isAuthenticated) return null;
+  return <BookReader />;
+}
+
+function BookReader() {
+  const id = useParams<{ id: string }>().id as Id<"books">;
   const router = useRouter();
   const viewRef = useRef<HTMLDivElement>(null);
-  const events = useRef<FrameEvents>({ key: () => {}, tap: () => {}, activity: () => {} });
+  const events = useRef<FrameEvents>({
+    key: () => {},
+    tap: () => {},
+    activity: () => {},
+    press: () => false,
+    rendered: () => {},
+    swipe: () => {},
+  });
   const reader = useEpubReader(id, viewRef, events);
-  const { meta, status, toc, chapterIdx, pagesLeft, percent, prefs, updatePrefs, next, prev, jumpTo, flush } = reader;
+  const { meta, status, toc, chapterIdx, pagesLeft, percent, prefs, updatePrefs, next, prev, goChapter, jumpTo, flush } = reader;
 
   const [panel, setPanel] = useState<Panel | null>(null);
+  const [termId, setTermId] = useState<Id<"terms"> | null>(null);
+  const [listening, setListening] = useState(false);
   const [chrome, setChrome] = useState(true);
-  const panelRef = useRef(panel);
+  const panelOpen = useRef(false);
   useEffect(() => {
-    panelRef.current = panel;
-  }, [panel]);
+    panelOpen.current = panel !== null || termId !== null;
+  }, [panel, termId]);
+
+  // The section on screen, for underlining its terms and highlighting the spoken word.
+  const contentsRef = useRef<Contents | null>(null);
+  const [contents, setContents] = useState<Contents | null>(null);
+
+  const audio = useAudiobook(id, reader, contentsRef, viewRef);
+  const openTerm = useCallback((t: Id<"terms">) => {
+    setPanel(null);
+    setTermId(t);
+  }, []);
+  const terms = useTerms(id, contents, openTerm);
+
+  // Paging on your own while the audio plays stops the page from following the narration.
+  const { userMoved } = audio;
+  const userNext = useCallback(() => {
+    userMoved();
+    next();
+  }, [userMoved, next]);
+  const userPrev = useCallback(() => {
+    userMoved();
+    prev();
+  }, [userMoved, prev]);
+  const userChapter = useCallback(
+    (dir: 1 | -1) => {
+      userMoved();
+      goChapter(dir);
+    },
+    [userMoved, goChapter],
+  );
 
   // ---- controls fade away while reading ---------------------------------
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const scheduleHide = useCallback(() => {
     clearTimeout(idleTimer.current);
-    idleTimer.current = setTimeout(() => !panelRef.current && setChrome(false), IDLE_MS);
+    idleTimer.current = setTimeout(() => !panelOpen.current && setChrome(false), IDLE_MS);
   }, []);
   const poke = useCallback(() => {
     setChrome(true);
@@ -48,26 +103,61 @@ export function Reader() {
     return () => window.removeEventListener("mousemove", poke);
   }, [poke]);
 
-  const togglePanel = useCallback((p: Panel) => setPanel((cur) => (cur === p ? null : p)), []);
-  const closePanel = useCallback(() => setPanel(null), []);
-  const frameKey = useReaderKeys(reader, togglePanel, closePanel);
+  const togglePanel = useCallback((p: Panel) => {
+    setTermId(null);
+    setPanel((cur) => (cur === p ? null : p));
+  }, []);
+  const closePanel = useCallback(() => {
+    setPanel(null);
+    setTermId(null);
+  }, []);
+  const { toggle: toggleAudio } = audio;
+  const extraKeys = useMemo(
+    () => ({
+      a: () => setListening((l) => !l),
+      k: () => {
+        setListening(true);
+        toggleAudio();
+      },
+    }),
+    [toggleAudio],
+  );
+  const frameKey = useReaderKeys(
+    { next: userNext, prev: userPrev, goChapter: userChapter, updatePrefs, prefs },
+    togglePanel,
+    closePanel,
+    extraKeys,
+  );
 
   // Taps on the page: left edge goes back, right edge goes forward, middle shows/hides controls.
   const onTap = useCallback(
     (x: number) => {
-      if (x < 0.3) prev();
-      else if (x > 0.7) next();
+      if (x < 0.3) userPrev();
+      else if (x > 0.7) userNext();
       else if (chrome) setChrome(false);
       else poke();
     },
-    [prev, next, chrome, poke],
+    [userPrev, userNext, chrome, poke],
   );
 
+  const { onRendered } = audio;
+  const { press } = terms;
   useEffect(() => {
-    events.current = { key: frameKey, tap: onTap, activity: poke };
-  }, [frameKey, onTap, poke]);
+    events.current = {
+      key: frameKey,
+      tap: onTap,
+      activity: poke,
+      press,
+      swipe: (dir) => (dir > 0 ? userNext() : userPrev()),
+      rendered: (c) => {
+        contentsRef.current = c;
+        setContents(c);
+        onRendered(c);
+      },
+    };
+  }, [frameKey, onTap, poke, press, userNext, userPrev, onRendered]);
 
-  const showChrome = chrome || panel !== null || status !== "ready";
+  const showChrome = chrome || panel !== null || termId !== null || status !== "ready";
 
   return (
     <div
@@ -79,6 +169,8 @@ export function Reader() {
         visible={showChrome}
         panel={panel}
         onToggle={togglePanel}
+        listening={listening}
+        onListen={() => setListening((l) => !l)}
         onBack={() => {
           flush();
           router.push("/");
@@ -86,9 +178,9 @@ export function Reader() {
       />
 
       <div className="relative flex-1 px-[max(1.25rem,6vw)] pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
-        <EdgeButton side="left" onClick={prev} />
+        <EdgeButton side="left" onClick={userPrev} />
         <div ref={viewRef} className="h-full w-full" />
-        <EdgeButton side="right" onClick={next} />
+        <EdgeButton side="right" onClick={userNext} />
 
         {status !== "ready" && (
           <div className="absolute inset-0 flex items-center justify-center px-6">
@@ -106,8 +198,11 @@ export function Reader() {
         )}
       </div>
 
-      {prefs.showProgress && status === "ready" && (
-        <ProgressFooter chapter={toc[chapterIdx]?.label ?? null} pagesLeft={pagesLeft} percent={percent} />
+      {listening && status === "ready" ? (
+        <AudioBar audio={audio} onClose={() => setListening(false)} />
+      ) : (
+        prefs.showProgress &&
+        status === "ready" && <ProgressFooter chapter={toc[chapterIdx]?.label ?? null} pagesLeft={pagesLeft} percent={percent} />
       )}
 
       {panel === "toc" && (
@@ -116,6 +211,7 @@ export function Reader() {
           current={chapterIdx}
           onClose={closePanel}
           onPick={(i) => {
+            userMoved();
             jumpTo(i);
             closePanel();
           }}
@@ -123,6 +219,7 @@ export function Reader() {
       )}
       {panel === "type" && <SettingsPanel prefs={prefs} onChange={updatePrefs} onClose={closePanel} />}
       {panel === "keys" && <ShortcutsDialog onClose={closePanel} />}
+      {termId && <BriefPanel key={termId} termId={termId} onClose={closePanel} />}
     </div>
   );
 }

@@ -12,6 +12,8 @@ export const SHORTCUTS: [string, string][] = [
   ["P", "Show / hide progress"],
   ["−  =", "Smaller / larger text"],
   ["N", "Parchment / night"],
+  ["A", "Show / hide the audiobook"],
+  ["K", "Play / pause the audiobook"],
   ["Esc", "Close panel"],
   ["?", "Shortcuts"],
 ];

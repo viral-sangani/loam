@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Keyboard, List } from "lucide-react";
+import { ArrowLeft, Headphones, Keyboard, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Panel } from "./config";
@@ -11,12 +11,16 @@ export function TopBar({
   panel,
   onToggle,
   onBack,
+  listening,
+  onListen,
 }: {
   title: string | undefined;
   visible: boolean;
   panel: Panel | null;
   onToggle: (p: Panel) => void;
   onBack: () => void;
+  listening: boolean;
+  onListen: () => void;
 }) {
   const icon = (p: Panel) => cn("text-muted-foreground pointer-coarse:size-11", panel === p && "bg-muted text-foreground");
   return (
@@ -33,6 +37,16 @@ export function TopBar({
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon" aria-label="Keyboard shortcuts" className={cn(icon("keys"), "pointer-coarse:hidden")} onClick={() => onToggle("keys")}>
           <Keyboard />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Audiobook"
+          aria-pressed={listening}
+          className={cn("text-muted-foreground pointer-coarse:size-11", listening && "bg-muted text-foreground")}
+          onClick={onListen}
+        >
+          <Headphones />
         </Button>
         <Button variant="ghost" size="icon" aria-label="Contents" className={icon("toc")} onClick={() => onToggle("toc")}>
           <List />

@@ -2,20 +2,15 @@
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
+/**
+ * Books live in Convex now. The browser keeps reader settings and two caches:
+ * the EPUB file (so reopening a book is instant) and epub.js's location index (for percentages).
+ */
+
 export type Progress = {
   cfi: string;
   percent: number | null; // 0..1, null until locations are generated
   chapter: string | null;
-};
-
-export type Book = {
-  id: string;
-  title: string;
-  author: string;
-  cover: Blob | null;
-  addedAt: number;
-  openedAt: number | null;
-  progress: Progress | null;
 };
 
 export type ReaderPrefs = {
@@ -27,92 +22,56 @@ export type ReaderPrefs = {
 
 export const DEFAULT_PREFS: ReaderPrefs = { fontSize: 105, lineHeight: 1.65, theme: "light", showProgress: true };
 
-interface LoamDB extends DBSchema {
-  books: { key: string; value: Book; indexes: { openedAt: number } };
-  files: { key: string; value: Blob };
-  locations: { key: string; value: string }; // epub.js locations JSON, cached per book
+interface CacheDB extends DBSchema {
+  files: { key: string; value: Blob }; // by storage id
+  locations: { key: string; value: string }; // by book id
 }
 
-let dbPromise: Promise<IDBPDatabase<LoamDB>> | null = null;
+let dbPromise: Promise<IDBPDatabase<CacheDB>> | null = null;
+const db = () => (dbPromise ??= openDB<CacheDB>("loam-cache", 1, {
+  upgrade(d) {
+    d.createObjectStore("files");
+    d.createObjectStore("locations");
+  },
+}));
 
-function db() {
-  dbPromise ??= openDB<LoamDB>("loam", 1, {
-    upgrade(d) {
-      d.createObjectStore("books", { keyPath: "id" }).createIndex("openedAt", "openedAt");
-      d.createObjectStore("files");
-      d.createObjectStore("locations");
-    },
-  });
-  return dbPromise;
-}
-
-/** Ask the browser not to evict the library under storage pressure. */
-export async function requestPersistence() {
+/** The book file, from the local cache or downloaded once from storage. */
+export async function loadBookFile(storageId: string, url: string): Promise<ArrayBuffer> {
   try {
-    if (navigator.storage?.persisted && !(await navigator.storage.persisted())) {
-      await navigator.storage.persist();
-    }
+    const hit = await (await db()).get("files", storageId);
+    if (hit) return hit.arrayBuffer();
+  } catch {
+    /* cache is best effort */
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Couldn't download the book (${res.status})`);
+  const blob = await res.blob();
+  void db().then((d) => d.put("files", blob, storageId)).catch(() => {});
+  return blob.arrayBuffer();
+}
+
+export async function cacheBookFile(storageId: string, file: Blob) {
+  try {
+    await (await db()).put("files", file, storageId);
   } catch {
     /* best effort */
   }
 }
 
-export async function listBooks(): Promise<Book[]> {
-  const all = await (await db()).getAll("books");
-  return all.sort((a, b) => (b.openedAt ?? b.addedAt) - (a.openedAt ?? a.addedAt));
-}
-
-export async function getBook(id: string) {
-  return (await db()).get("books", id);
-}
-
-export async function getBookFile(id: string) {
-  return (await db()).get("files", id);
-}
-
-export async function addEpub(file: File): Promise<Book> {
-  const meta = await readEpubMeta(file);
-  const book: Book = {
-    id: crypto.randomUUID(),
-    title: meta.title || file.name.replace(/\.epub$/i, ""),
-    author: meta.author,
-    cover: meta.cover,
-    addedAt: Date.now(),
-    openedAt: null,
-    progress: null,
-  };
-  const d = await db();
-  const tx = d.transaction(["books", "files"], "readwrite");
-  await Promise.all([tx.objectStore("files").put(file, book.id), tx.objectStore("books").put(book), tx.done]);
-  void requestPersistence();
-  return book;
-}
-
-export async function removeBook(id: string) {
-  const d = await db();
-  const tx = d.transaction(["books", "files", "locations"], "readwrite");
-  await Promise.all([
-    tx.objectStore("books").delete(id),
-    tx.objectStore("files").delete(id),
-    tx.objectStore("locations").delete(id),
-    tx.done,
-  ]);
-}
-
-/** Single read-write transaction, so rapid page turns are applied in order. */
-export async function saveProgress(id: string, progress: Progress) {
-  const tx = (await db()).transaction("books", "readwrite");
-  const book = await tx.store.get(id);
-  if (book) await tx.store.put({ ...book, progress, openedAt: Date.now() });
-  await tx.done;
-}
-
 export async function getLocations(id: string) {
-  return (await db()).get("locations", id);
+  try {
+    return await (await db()).get("locations", id);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function saveLocations(id: string, json: string) {
-  await (await db()).put("locations", json, id);
+  try {
+    await (await db()).put("locations", json, id);
+  } catch {
+    /* best effort */
+  }
 }
 
 const PREFS_KEY = "loam:reader-prefs";
@@ -124,25 +83,9 @@ export function loadPrefs(): ReaderPrefs {
   }
 }
 export function savePrefs(p: ReaderPrefs) {
-  localStorage.setItem(PREFS_KEY, JSON.stringify(p));
-}
-
-async function readEpubMeta(file: File) {
-  const { default: ePub } = await import("epubjs");
-  const book = ePub(await file.arrayBuffer());
   try {
-    const metadata = await book.loaded.metadata;
-    let cover: Blob | null = null;
-    try {
-      const url = await book.coverUrl();
-      if (url) cover = await (await fetch(url)).blob();
-    } catch {
-      /* no cover */
-    }
-    return { title: metadata.title?.trim() ?? "", author: metadata.creator?.trim() ?? "", cover };
-  } finally {
-    // epub.js keeps loading (navigation, display options) after metadata; let it settle first.
-    await book.ready.catch(() => {});
-    book.destroy();
+    localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+  } catch {
+    /* private mode */
   }
 }

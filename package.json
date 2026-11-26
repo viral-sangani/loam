@@ -6,13 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "convex": "convex dev",
+    "aligner": "node --env-file=.env.local worker/aligner.mjs"
   },
   "dependencies": {
+    "@auth/core": "^0.41.3",
     "@base-ui/react": "^1.9.0",
+    "@convex-dev/auth": "^2.1.0",
     "@fontsource-variable/literata": "^5.3.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
+    "convex": "^1.51.0",
     "epubjs": "^0.3.93",
     "idb": "^8.0.4",
     "lucide-react": "^1.79.0",
