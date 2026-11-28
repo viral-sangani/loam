@@ -1,45 +1,57 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { ExternalLink } from "lucide-react";
 import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
+import type { ReaderTerm } from "./use-terms";
 import { Failed, Loading, SectionLabel, Sheet, SheetBody } from "./sheet";
 
 const link =
   "flex w-fit min-h-9 cursor-pointer items-center gap-2 rounded-sm text-sm font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/60 pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:shrink-0";
 
 /** The right-hand panel for a tapped term: a short briefing, then what it means in this passage. */
-export function BriefPanel({ termId, onClose }: { termId: Id<"terms">; onClose: () => void }) {
+export function BriefPanel({ term, onClose }: { term: ReaderTerm; onClose: () => void }) {
+  const termId = term._id;
   const request = useMutation(api.briefs.request);
   const brief = useQuery(api.briefs.get, { termId });
 
-  useEffect(() => {
-    void request({ termId }).catch(() => {});
+  const [requestFailed, setRequestFailed] = useState(false);
+  const load = useCallback(() => {
+    void request({ termId }).catch(() => setRequestFailed(true));
   }, [request, termId]);
+  useEffect(load, [load]);
 
   const d = brief?.data;
+  const text = d ?? term.explanation;
+  const failed = requestFailed || brief?.status === "error" || brief === null;
   return (
-    <Sheet title={d?.title ?? brief?.term ?? ""} variant="side" onClose={onClose}>
+    <Sheet title={text?.title ?? term.term} variant="side" onClose={onClose}>
       <SheetBody className="space-y-6">
-        {!d && brief?.status !== "error" && <Loading />}
-        {brief?.status === "error" && <Failed message="Couldn't build the briefing." onRetry={() => void request({ termId })} />}
-        {d && (
+        {!text && (failed ? (
+          <Failed message="Couldn't load the explanation." onRetry={() => { setRequestFailed(false); load(); }} />
+        ) : <Loading label="Writing an explanation…" />)}
+        {text && (
           <>
-            {d.image && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={d.image} alt={d.title} className="max-h-56 w-full rounded-lg border border-border object-cover" />
-            )}
-            <section className="space-y-2">
-              {d.description && <SectionLabel>{d.description}</SectionLabel>}
-              <p className="text-base leading-relaxed">{d.summary}</p>
-            </section>
-            {d.context && (
+            <p className="text-base leading-relaxed">{text.summary}</p>
+            {text.context && (
               <section className="space-y-2 border-t border-border pt-5">
                 <SectionLabel>In this passage</SectionLabel>
-                <p className="text-base leading-relaxed">{d.context}</p>
+                <p className="text-base leading-relaxed">{text.context}</p>
               </section>
+            )}
+          </>
+        )}
+        {d && (
+          <>
+            {(d.image || d.description) && (
+              <figure className="space-y-2">
+                {d.image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={d.image} alt={d.title} loading="lazy" className="max-h-56 w-full rounded-lg border border-border object-cover" />
+                )}
+                {d.description && <figcaption><SectionLabel>{d.description}</SectionLabel></figcaption>}
+              </figure>
             )}
             {(d.video || d.wikiUrl) && (
               <section className="space-y-1 border-t border-border pt-5">
@@ -49,6 +61,7 @@ export function BriefPanel({ termId, onClose }: { termId: Id<"terms">; onClose: 
                       className="aspect-video w-full"
                       src={`https://www.youtube-nocookie.com/embed/${d.video.id}`}
                       title={d.video.title}
+                      loading="lazy"
                       allow="encrypted-media; picture-in-picture"
                       allowFullScreen
                     />

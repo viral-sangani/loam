@@ -6,11 +6,12 @@ export const STYLE = `Start with the answer. Don't restate the question, don't o
 const BASE_URL = process.env.LLM_BASE_URL ?? "https://models.dehold.co/v1";
 const MODEL = process.env.LLM_MODEL ?? "gpt-6-luna";
 
-async function chat(system: string, user: string, maxTokens: number, json: boolean): Promise<string> {
+async function chat(system: string, user: string, maxTokens: number, json: boolean, signal?: AbortSignal): Promise<string> {
   const key = process.env.DEHOLD_API_KEY;
   if (!key) throw new Error("DEHOLD_API_KEY is not set on the Convex deployment");
   const res = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
+    signal,
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: MODEL,
@@ -27,8 +28,8 @@ async function chat(system: string, user: string, maxTokens: number, json: boole
   return body.choices?.[0]?.message?.content ?? "";
 }
 
-export async function chatJSON<T>(system: string, user: string, maxTokens = 1500): Promise<T> {
-  return parseJSON<T>(await chat(system, user, maxTokens, true));
+export async function chatJSON<T>(system: string, user: string, maxTokens = 1500, signal?: AbortSignal): Promise<T> {
+  return parseJSON<T>(await chat(system, user, maxTokens, true, signal));
 }
 
 /** A plain-text (Markdown) reply. */

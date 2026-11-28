@@ -34,6 +34,25 @@ export const vAudioFile = v.object({
   durationMs: v.optional(v.number()),
 });
 
+export const vTermExplanation = v.object({
+  title: v.string(),
+  summary: v.string(),
+  context: v.string(),
+  wiki: v.optional(v.string()),
+});
+
+export const vBriefData = v.object({
+  title: v.string(),
+  description: v.optional(v.string()),
+  summary: v.string(),
+  points: v.array(v.string()),
+  context: v.string(),
+  image: v.optional(v.string()),
+  wikiUrl: v.optional(v.string()),
+  video: v.optional(v.object({ id: v.string(), title: v.string() })),
+  videoSearch: v.string(),
+});
+
 export default defineSchema({
   users: defineTable({ createdAt: v.number() }),
 
@@ -114,6 +133,7 @@ export default defineSchema({
     section: v.number(),
     para: v.number(),
     term: v.string(),
+    explanation: v.optional(vTermExplanation),
   })
     .index("by_book", ["bookId", "section"]),
 
@@ -126,19 +146,7 @@ export default defineSchema({
     ...review,
     status: v.union(v.literal("pending"), v.literal("ready"), v.literal("error")),
     error: v.optional(v.string()),
-    data: v.optional(
-      v.object({
-        title: v.string(),
-        description: v.optional(v.string()),
-        summary: v.string(),
-        points: v.array(v.string()),
-        context: v.string(),
-        image: v.optional(v.string()),
-        wikiUrl: v.optional(v.string()),
-        video: v.optional(v.object({ id: v.string(), title: v.string() })),
-        videoSearch: v.string(),
-      }),
-    ),
+    data: v.optional(vBriefData),
   })
     .index("by_term", ["termId"])
     .index("by_book", ["bookId"])

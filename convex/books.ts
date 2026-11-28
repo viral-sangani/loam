@@ -3,7 +3,7 @@ import { ownerId } from "./auth";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { vAudioFile, vProgress } from "./schema";
+import { vAudioFile, vProgress, vTermExplanation } from "./schema";
 
 export async function requireUser(ctx: QueryCtx | MutationCtx) {
   const userId = await ownerId(ctx);
@@ -258,14 +258,18 @@ export const sectionTimings = query({
 });
 
 export const sectionTerms = query({
-  args: { bookId: v.id("books"), section: v.number() },
-  handler: async (ctx, { bookId, section }) => {
+  args: { bookId: v.id("books"), section: v.number(), includeExplanation: v.optional(v.boolean()) },
+  returns: v.array(v.object({ _id: v.id("terms"), para: v.number(), term: v.string(), explanation: v.optional(vTermExplanation) })),
+  handler: async (ctx, { bookId, section, includeExplanation }) => {
     await ownBook(ctx, bookId);
     const rows = await ctx.db
       .query("terms")
       .withIndex("by_book", (q) => q.eq("bookId", bookId).eq("section", section))
       .collect();
-    return rows.map((t) => ({ _id: t._id, para: t.para, term: t.term }));
+    return rows.map(({ _id, para, term, explanation }) => ({
+      _id, para, term,
+      ...(includeExplanation && explanation ? { explanation } : {}),
+    }));
   },
 });
 

@@ -1,23 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import type { Contents } from "epubjs";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { findTerm, tokenize, wordRange, paragraphText } from "@/lib/book-text";
-import { caretAt, paint, paragraphsOf } from "./highlights";
+import { paint, paragraphsOf } from "./highlights";
 
-type Placed = { termId: Id<"terms">; range: Range };
+export type ReaderTerm = FunctionReturnType<typeof api.books.sectionTerms>[number];
+type Placed = { term: ReaderTerm; paragraph: Element; range: Range };
 
 /**
  * Underlines the "learn more" terms of the section on screen, and reports which one a click hit.
  * Terms stream in while the book is still being processed; the underlines update as they arrive.
  */
-export function useTerms(bookId: Id<"books">, contents: Contents | null, onOpen: (termId: Id<"terms">) => void) {
+export function useTerms(bookId: Id<"books">, contents: Contents | null, onOpen: (term: ReaderTerm) => void) {
   const section = contents?.sectionIndex;
-  const terms = useQuery(api.books.sectionTerms, section === undefined ? "skip" : { bookId, section });
-  const placed = useRef<Placed[]>([]);
+  const terms = useQuery(api.books.sectionTerms, section === undefined ? "skip" : { bookId, section, includeExplanation: true });
+  const placed = useRef(new WeakMap<Document, Placed[]>());
 
   useEffect(() => {
     if (!contents || !terms) return;
@@ -28,30 +30,31 @@ export function useTerms(bookId: Id<"books">, contents: Contents | null, onOpen:
       if (!el) continue;
       const hit = findTerm(tokenize(paragraphText(el)), t.term);
       const range = hit && wordRange(el, hit[0], hit[1]);
-      if (range) out.push({ termId: t._id, range });
+      if (range) out.push({ term: t, paragraph: el, range });
     }
-    placed.current = out;
+    placed.current.set(contents.document, out);
     paint(contents, "loam-term", out.map((p) => p.range));
   }, [contents, terms]);
+
+  const byId = useMemo(() => new Map(terms?.map((term) => [term._id, term])), [terms]);
 
   /** Opens the term under a click, if there is one. */
   const press = useCallback(
     (c: Contents, x: number, y: number) => {
-      const pos = caretAt(c.document, x, y);
-      if (!pos) return false;
-      const hit = placed.current.find((p) => {
-        try {
-          return p.range.isPointInRange(pos.node, pos.offset);
-        } catch {
-          return false;
-        }
-      });
+      const target = c.document.elementFromPoint(x, y);
+      if (!target) return false;
+      const hit = placed.current.get(c.document)?.find(({ paragraph, range }) =>
+        paragraph.contains(target) && Array.from(range.getClientRects()).some(
+          // The dots sit just below the glyphs, outside the browser's text caret hit area.
+          (r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom + 4,
+        ),
+      );
       if (!hit) return false;
-      onOpen(hit.termId);
+      onOpen(hit.term);
       return true;
     },
     [onOpen],
   );
 
-  return { press };
+  return { press, byId };
 }

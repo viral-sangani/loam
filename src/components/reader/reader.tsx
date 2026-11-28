@@ -37,10 +37,10 @@ import { useMarks } from "./use-marks";
 import { useReaderKeys } from "./use-reader-keys";
 import { ReaderBlank } from "./reader-blank";
 import { useSelection } from "./use-selection";
-import { useTerms } from "./use-terms";
+import { useTerms, type ReaderTerm } from "./use-terms";
 
 /** Panels about something in the text. Like the top-bar panels, only one is open at a time. */
-type Detail = { kind: "term"; id: Id<"terms"> } | { kind: "mark"; id: Id<"marks"> } | { kind: "ask" };
+type Detail = { kind: "term"; term: ReaderTerm } | { kind: "mark"; id: Id<"marks"> } | { kind: "ask" };
 
 /** A place in the book from the URL (`?s=<section>&p=<paragraph>`), e.g. from the daily review. */
 function spotFrom(params: URLSearchParams): Pos | null {
@@ -110,7 +110,7 @@ function BookReader({ id, handoff, shared, sharedError }: {
     setPanel(null);
     setDetail(d);
   }, []);
-  const openTerm = useCallback((t: Id<"terms">) => openDetail({ kind: "term", id: t }), [openDetail]);
+  const openTerm = useCallback((term: ReaderTerm) => openDetail({ kind: "term", term }), [openDetail]);
   const openMark = useCallback((m: Id<"marks">) => openDetail({ kind: "mark", id: m }), [openDetail]);
   const terms = useTerms(id, owner ? contents : null, openTerm);
   const marks = useMarks(id, owner ? contents : null, openMark);
@@ -371,7 +371,7 @@ function BookReader({ id, handoff, shared, sharedError }: {
         <BookAskPanel bookId={id} position={position} onJump={jump} onClose={closePanel} onSwitch={setPanel} />
       )}
       {panel === "recap" && <RecapPanel bookId={id} position={position} onJump={jump} onClose={closePanel} onSwitch={setPanel} />}
-      {detail?.kind === "term" && <BriefPanel key={detail.id} termId={detail.id} onClose={closePanel} />}
+      {detail?.kind === "term" && <BriefPanel key={detail.term._id} term={terms.byId.get(detail.term._id) ?? detail.term} onClose={closePanel} />}
       {openedMark && (
         <MarkPanel
           key={openedMark._id}

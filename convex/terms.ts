@@ -1,7 +1,8 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { chatJSON } from "./llm";
+import { vTermExplanation } from "./schema";
 
 /** Sections shorter than this (title pages, copyright, dedications) are skipped. */
 const MIN_WORDS = 60;
@@ -15,8 +16,14 @@ foreign or archaic words, and cultural references.
 Skip everyday words, invented names of fictional characters and places, and anything obvious from context.
 Pick only terms genuinely worth a look, at most one per 50 words. Never repeat a term, and skip terms already annotated earlier.
 Copy each term exactly as it appears in its paragraph, 1 to 5 words.
-Reply with JSON only: {"terms":[{"p":<paragraph number>,"t":"<exact text>"}]}.
+Give each term a one-sentence plain-language definition and, when useful, one short sentence about
+what it refers to in the supplied passage. Avoid plot details beyond the term's own paragraph.
+For real-world topics, give the exact English Wikipedia article title if known.
+Reply with JSON only:
+{"terms":[{"p":<paragraph number>,"t":"<exact text>","d":"<definition>","c":"<passage context or empty>","w":"<Wikipedia title or empty>"}]}.
 Reply {"terms":[]} for front or back matter (copyright pages, contents, acknowledgements) or when nothing qualifies.`;
+
+type AnnotatedTerm = { para: number; term: string; explanation?: Infer<typeof vTermExplanation> };
 
 const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
 
@@ -55,13 +62,14 @@ export const save = internalMutation({
   args: {
     bookId: v.id("books"),
     section: v.number(),
-    terms: v.array(v.object({ para: v.number(), term: v.string() })),
+    terms: v.array(v.object({ para: v.number(), term: v.string(), explanation: v.optional(vTermExplanation) })),
     error: v.optional(v.string()),
     last: v.boolean(),
   },
+  returns: v.null(),
   handler: async (ctx, { bookId, section, terms, error, last }) => {
     const book = await ctx.db.get(bookId);
-    if (!book) return;
+    if (!book) return null;
     for (const t of terms) await ctx.db.insert("terms", { bookId, section, ...t });
     const done = book.terms.done + 1;
     await ctx.db.patch(bookId, {
@@ -72,6 +80,7 @@ export const save = internalMutation({
         ...(error ? { error } : book.terms.error ? { error: book.terms.error } : {}),
       },
     });
+    return null;
   },
 });
 
@@ -89,7 +98,7 @@ export const run = internalAction({
     }
 
     const known = new Set(next.known.map((t) => t.toLowerCase()));
-    const found: { para: number; term: string }[] = [];
+    const found: AnnotatedTerm[] = [];
     let error: string | undefined;
 
     // Batch paragraphs into chunks of about CHUNK_WORDS words.
@@ -108,18 +117,26 @@ export const run = internalAction({
       const numbered = chunk.map((pi, n) => `[${n + 1}] ${section.paragraphs[pi]}`).join("\n\n");
       const recent = [...known].slice(-150).join(", ");
       try {
-        const out = await chatJSON<{ terms?: { p?: number; t?: string }[] }>(
+        const out = await chatJSON<{ terms?: { p?: number; t?: string; d?: string; c?: string; w?: string }[] }>(
           SYSTEM,
           `Book: ${title}${author ? ` by ${author}` : ""}\nAlready annotated earlier: ${recent || "none"}\n\n${numbered}`,
+          3500,
         );
-        for (const { p, t } of out.terms ?? []) {
+        for (const { p, t, d, c, w } of out.terms ?? []) {
           const pi = typeof p === "number" ? chunk[p - 1] : undefined;
-          const term = t?.trim();
+          const term = typeof t === "string" ? t.trim() : "";
           if (pi === undefined || !term || known.has(term.toLowerCase())) continue;
           // Only keep terms that really appear in their paragraph, so the reader can underline them.
           if (!section.paragraphs[pi].toLowerCase().includes(term.toLowerCase())) continue;
           known.add(term.toLowerCase());
-          found.push({ para: pi, term });
+          const summary = typeof d === "string" ? d.trim().slice(0, 600) : "";
+          const context = typeof c === "string" ? c.trim().slice(0, 600) : "";
+          const wiki = typeof w === "string" ? w.trim().slice(0, 256) : "";
+          found.push({
+            para: pi,
+            term,
+            ...(summary ? { explanation: { title: term, summary, context, ...(wiki ? { wiki } : {}) } } : {}),
+          });
         }
       } catch (e) {
         error = e instanceof Error ? e.message : String(e);
