@@ -8,6 +8,8 @@ import type { Contents } from "epubjs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Id } from "@convex/_generated/dataModel";
 import type { Pos } from "@/lib/anchors";
+import { SCENE } from "@/components/room/loader";
+import { currentLibraryView } from "@/components/room/view-mode";
 import { takeHandoff, warmBook, type Handoff } from "@/lib/open-book";
 import { cn } from "@/lib/utils";
 import { AskPanel, useAskThread, type Passage } from "./ask-panel";
@@ -29,6 +31,7 @@ import { useAudiobook } from "./use-audiobook";
 import { useEpubReader, type FrameEvents } from "./use-epub-reader";
 import { useMarks } from "./use-marks";
 import { useReaderKeys } from "./use-reader-keys";
+import { ReaderBlank } from "./reader-blank";
 import { useSelection } from "./use-selection";
 import { useTerms } from "./use-terms";
 
@@ -55,7 +58,7 @@ export function Reader() {
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/");
   }, [isLoading, isAuthenticated, router]);
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) return <ReaderBlank />;
   return <BookReader id={id} handoff={handoff} />;
 }
 
@@ -82,6 +85,7 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
   // `?listen=1` (the library's Listen button) opens with the audiobook bar showing.
   const [listening, setListening] = useState(() => params.get("listen") === "1");
   const [chrome, setChrome] = useState(true);
+  const [leaving, setLeaving] = useState(false);
   const panelOpen = useRef(false);
   useEffect(() => {
     panelOpen.current = panel !== null || detail !== null;
@@ -240,6 +244,7 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
     meta.name = "theme-color";
     meta.content = { paper: "#fcfcfa", sepia: "#efe6d4", night: "#221c17" }[prefs.theme];
     document.head.prepend(meta); // first match wins over the layout's defaults
+    document.documentElement.dataset.page = prefs.theme;
     return () => meta.remove();
   }, [prefs.theme]);
 
@@ -278,7 +283,11 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
         onListen={() => setListening((l) => !l)}
         onBack={() => {
           flush();
-          router.push("/");
+          // Going back to the room: fade to its dark first, so the lamp loader follows without a flash.
+          if (currentLibraryView() !== "room" || matchMedia("(prefers-reduced-motion: reduce)").matches) return router.push("/");
+          router.prefetch("/");
+          setLeaving(true);
+          setTimeout(() => router.push("/"), 300);
         }}
       />
 
@@ -294,14 +303,14 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
         )}
       >
         <EdgeButton side="left" onClick={userPrev} />
-        <div ref={viewRef} className="h-full w-full" />
+        <div ref={viewRef} className={cn("h-full w-full transition-opacity duration-300 ease-out", status === "ready" ? "opacity-100" : "opacity-0")} />
         <EdgeButton side="right" onClick={userNext} />
 
         {status !== "ready" && (
           <div className="absolute inset-0 flex items-center justify-center px-6">
             {status === "loading" && (
-              <p role="status" className="text-sm text-muted-foreground">
-                Loading…
+              <p role="status" className="loam-late text-sm text-muted-foreground">
+                Opening the book
               </p>
             )}
             {status === "missing" && (
@@ -394,6 +403,7 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
           onClose={clearSelection}
         />
       )}
+      <div aria-hidden className="pointer-events-none fixed inset-0 z-[70] transition-opacity duration-300 ease-out" style={{ background: SCENE, opacity: leaving ? 1 : 0 }} />
     </div>
   );
 }

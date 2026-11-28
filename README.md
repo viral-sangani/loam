@@ -8,7 +8,7 @@ passage, and a video or Wikipedia link when there is one.
 
 ## How it works
 
-- **Next.js app** (`src/`): sign-in, the library (a list of your books), and the reader (epub.js).
+- **Next.js app** (`src/`): sign-in, the library (a 3D reading room built with three.js, or a plain list on phones and by choice), and the reader (epub.js).
   Highlights are painted with the CSS Custom Highlight API, so the book's markup never changes.
 - **Convex** (`convex/`): accounts (username + password via Convex Auth), books, files, reading
   progress, word timings, terms and briefings. Syncs across devices.

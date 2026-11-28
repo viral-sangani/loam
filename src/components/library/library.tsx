@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -8,7 +9,10 @@ import { ChevronDown, Headphones, LogOut, Plus } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { SignIn } from "@/components/auth/sign-in";
-import { Btn, IconBtn } from "@/components/reader/kit";
+import { Btn, IconBtn, Segmented } from "@/components/reader/kit";
+import { RoomLoader, SCENE } from "@/components/room/loader";
+import { useLibraryView, type LibraryView } from "@/components/room/view-mode";
+import "@/components/room/room.css";
 import { ReviewDesk } from "@/components/shelf/review-desk";
 import { useDescriptionBackfill } from "@/lib/describe";
 import { loadPrefs, type ReaderTheme } from "@/lib/library";
@@ -35,19 +39,42 @@ function useTheme(): ReaderTheme {
 
 const noop = () => () => {};
 
+const loadRoom = () => import("@/components/room/room-view").then((m) => m.RoomView);
+const RoomView = dynamic(loadRoom, { ssr: false, loading: () => <RoomLoader /> });
+
 export function Home() {
   const { isLoading, isAuthenticated } = useConvexAuth();
+  const { view, setView, canRoom } = useLibraryView();
   // The last list seen on this device, shown while sign-in is confirmed.
   const cached = useSyncExternalStore(noop, readCachedBooks, () => null);
+  const roomFirst = view === "room" && canRoom;
+  useEffect(() => {
+    if (roomFirst) void loadRoom();
+  }, [roomFirst]);
   useEffect(() => {
     if (!isLoading && !isAuthenticated) clearCachedBooks();
   }, [isLoading, isAuthenticated]);
-  if (isAuthenticated) return <Library cached={cached} live />;
-  if (isLoading) return cached ? <Library cached={cached} live={false} /> : null;
+  if (isAuthenticated) return <Library cached={cached} live view={view} setView={setView} canRoom={canRoom} />;
+  if (isLoading) {
+    if (cached) return <Library cached={cached} live={false} view={view} setView={setView} canRoom={canRoom} />;
+    return roomFirst ? <RoomLoader /> : null;
+  }
   return <SignIn />;
 }
 
-function Library({ cached, live }: { cached: ListedBook[] | null; live: boolean }) {
+function Library({
+  cached,
+  live,
+  view,
+  setView,
+  canRoom,
+}: {
+  cached: ListedBook[] | null;
+  live: boolean;
+  view: LibraryView;
+  setView: (v: LibraryView) => void;
+  canRoom: boolean;
+}) {
   const convex = useConvex();
   const fresh = useQuery(api.books.list, live ? {} : "skip");
   const books = fresh ?? cached ?? undefined;
@@ -61,6 +88,9 @@ function Library({ cached, live }: { cached: ListedBook[] | null; live: boolean 
   const [audioFor, setAudioFor] = useState<Id<"books"> | null>(null);
   const [uploads, setUploads] = useState<Record<string, number>>({});
   const [openId, setOpenId] = useState<string | null>(null);
+  // Set when the room can't draw here after all (no WebGL, or the GPU dropped it): the list takes over.
+  const [fallback, setFallback] = useState<"webgl" | "lost" | null>(null);
+  const room = view === "room" && canRoom && !fallback;
   const inputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
 
@@ -84,10 +114,11 @@ function Library({ cached, live }: { cached: ListedBook[] | null; live: boolean 
   useEffect(() => {
     const meta = document.createElement("meta");
     meta.name = "theme-color";
-    meta.content = THEME_COLOR[theme];
+    meta.content = room ? SCENE : THEME_COLOR[theme];
     document.head.prepend(meta);
+    document.documentElement.dataset.lib = room ? "room" : "list";
     return () => meta.remove();
-  }, [theme]);
+  }, [theme, room]);
 
   const add = useCallback(
     async (files: FileList | File[]) => {
@@ -161,9 +192,26 @@ function Library({ cached, live }: { cached: ListedBook[] | null; live: boolean 
 
   const empty = books !== undefined && books.length === 0;
   const addBooks = () => inputRef.current?.click();
+  const addAudio = (bookId: string) => {
+    setAudioFor(bookId as Id<"books">);
+    audioRef.current?.click();
+  };
+  const remove = async (bookId: string) => {
+    setOpenId(null);
+    try {
+      await removeBook({ bookId: bookId as Id<"books"> });
+    } catch (e) {
+      console.error(e);
+      setError("Couldn't remove that book.");
+    }
+  };
+  const chooseView = (v: LibraryView) => {
+    setFallback(null);
+    setView(v);
+  };
 
-  return (
-    <div data-reader-theme={theme} className="relative z-10 flex min-h-dvh w-full flex-1 flex-col bg-background text-foreground">
+  const files = (
+    <>
       <input
         ref={inputRef}
         type="file"
@@ -192,6 +240,40 @@ function Library({ cached, live }: { cached: ListedBook[] | null; live: boolean 
         }}
       />
 
+      {dragging && (
+        <div aria-hidden className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/90">
+          <p className="text-lg">Drop EPUB files to add them</p>
+        </div>
+      )}
+    </>
+  );
+
+  if (room) {
+    return (
+      <div className="loam-lib relative z-10 flex min-h-dvh w-full flex-1 flex-col">
+        {files}
+        <RoomView
+          books={books}
+          uploads={uploads}
+          busy={busy}
+          error={error}
+          addBooks={live ? addBooks : () => {}}
+          addAudio={live ? addAudio : () => {}}
+          remove={remove}
+          signOut={() => void signOut()}
+          view={view}
+          setView={chooseView}
+          canRoom={canRoom}
+          onFallback={setFallback}
+          live={live}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div data-reader-theme={theme} className="relative z-10 flex min-h-dvh w-full flex-1 flex-col bg-background text-foreground animate-in duration-300 fade-in">
+      {files}
       <header className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-2 pl-[max(1.25rem,env(safe-area-inset-left))] sm:pt-8">
         <h1 className="text-lg font-semibold">Loam</h1>
         <div className="flex items-center gap-1">
@@ -199,6 +281,18 @@ function Library({ cached, live }: { cached: ListedBook[] | null; live: boolean 
             <Btn icon={<Plus aria-hidden />} onClick={addBooks} disabled={busy || !live}>
               {busy ? "Adding…" : "Add book"}
             </Btn>
+          )}
+          {canRoom && (
+            <Segmented
+              label="Library view"
+              options={[
+                ["room", "Room"],
+                ["list", "List"],
+              ]}
+              value="list"
+              onChange={chooseView}
+              className="w-32"
+            />
           )}
           <IconBtn label="Sign out" onClick={() => void signOut()}>
             <LogOut aria-hidden />
@@ -213,6 +307,11 @@ function Library({ cached, live }: { cached: ListedBook[] | null; live: boolean 
           </p>
         )}
 
+        {fallback && (
+          <p className="mb-4 text-sm text-muted-foreground">
+            {fallback === "webgl" ? "This browser can't draw the 3D room, so the list is shown." : "The 3D room stopped drawing, so the list is shown."}
+          </p>
+        )}
         {live && !empty && <ReviewDesk />}
 
         {empty && (
@@ -240,30 +339,14 @@ function Library({ cached, live }: { cached: ListedBook[] | null; live: boolean 
                 open={openId === b._id}
                 live={live}
                 onToggle={() => setOpenId((cur) => (cur === b._id ? null : b._id))}
-                onAddAudio={() => {
-                  setAudioFor(b._id);
-                  audioRef.current?.click();
-                }}
-                onRemove={async () => {
-                  setOpenId(null);
-                  try {
-                    await removeBook({ bookId: b._id });
-                  } catch (e) {
-                    console.error(e);
-                    setError("Couldn't remove that book.");
-                  }
-                }}
+                onAddAudio={() => addAudio(b._id)}
+                onRemove={() => remove(b._id)}
               />
             ))}
           </ul>
         )}
       </main>
 
-      {dragging && (
-        <div aria-hidden className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/90">
-          <p className="text-lg">Drop EPUB files to add them</p>
-        </div>
-      )}
     </div>
   );
 }

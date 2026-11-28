@@ -208,3 +208,37 @@ body:has([data-reader-theme="night"]) { background: oklch(0.2 0.012 60); }
     scroll-behavior: auto !important;
   }
 }
+
+/* The room's loader: a lamp glow that breathes, and words that show only if loading is slow. */
+.loam-lamp {
+  box-shadow: 0 0 40px 18px rgb(255 170 90 / 0.35);
+  animation: loam-lamp 2.4s ease-in-out infinite;
+}
+.loam-lamp-words {
+  animation: loam-fade-in 600ms ease-out 900ms both;
+}
+@keyframes loam-lamp {
+  0%, 100% { opacity: 0.75; box-shadow: 0 0 32px 14px rgb(255 170 90 / 0.28); }
+  50% { opacity: 1; box-shadow: 0 0 48px 22px rgb(255 170 90 / 0.4); }
+}
+@keyframes loam-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Before the app runs: the room's colour if the room will show, so the page doesn't flash parchment. */
+html[data-lib="room"] body:not(:has([data-reader-theme], .loam-blank)) {
+  background: #070403;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loam-lamp,
+  .loam-lamp-words {
+    animation: none;
+  }
+}
+
+/* The reader's page while it loads, in the saved theme's colour. */
+.loam-blank { background: #fcfcfa; }
+html[data-page="sepia"] .loam-blank { background: #efe6d4; }
+html[data-page="night"] .loam-blank { background: #221c17; }
+/* A status line that only appears if the wait is long enough to notice. */
+.loam-late { animation: loam-fade-in 400ms ease-out 600ms both; }
