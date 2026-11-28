@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Headphones, Keyboard, List, MessageCircleQuestionMark, NotebookPen } from "lucide-react";
+import { ArrowLeft, Headphones, List, MessageCircleQuestionMark, NotebookPen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Panel } from "./config";
 import { IconBtn } from "./kit";
@@ -40,19 +40,16 @@ export function TopBar({
           className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg pr-3 pl-2 text-sm font-medium text-muted-foreground transition-colors duration-150 outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 pointer-coarse:h-11 [&_svg]:size-[18px]"
         >
           <ArrowLeft />
-          Shelf
+          Library
         </button>
       </div>
       <p className="hidden max-w-md min-w-0 shrink truncate text-center text-sm text-muted-foreground sm:block">{title}</p>
       <div className="flex flex-1 basis-0 items-center justify-end gap-1 pointer-coarse:gap-2">
-        <IconBtn label="Keyboard shortcuts" active={on("keys")} onClick={() => onToggle("keys")} className="pointer-coarse:hidden">
-          <Keyboard />
-        </IconBtn>
         <IconBtn label="Audiobook" aria-pressed={listening} active={listening} onClick={onListen}>
           <Headphones />
         </IconBtn>
         {/* One button for "ask" and "recap", two views of the same companion switched inside the panel; it closes either. */}
-        <IconBtn label="Ask about the book" active={on("ask", "recap")} onClick={() => onToggle(panel === "recap" ? "recap" : "ask")}>
+        <IconBtn label="Ask" active={on("ask", "recap")} onClick={() => onToggle(panel === "recap" ? "recap" : "ask")}>
           <MessageCircleQuestionMark />
         </IconBtn>
         <IconBtn label="Notebook" active={on("notebook")} onClick={() => onToggle("notebook")}>

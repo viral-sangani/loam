@@ -14,15 +14,15 @@ export const SHORTCUTS: [string, string][] = [
   ["[  ]", "Previous / next chapter"],
   ["C", "Contents"],
   ["M", "Notebook"],
-  ["Q", "Ask about the book"],
-  ["R", "Story so far"],
+  ["Q", "Ask"],
+  ["R", "Recap"],
   ["P", "Show / hide progress"],
   ["−  =", "Smaller / larger text"],
-  ["N", "Next theme: paper, sepia, night"],
+  ["N", "Next theme"],
   ["A", "Show / hide audiobook"],
   ["K", "Play / pause audiobook"],
   ["Esc", "Close panel"],
-  ["?", "Shortcuts"],
+  ["?", "Keyboard shortcuts"],
 ];
 
 export type Panel = "toc" | "type" | "keys" | "notebook" | "ask" | "recap";

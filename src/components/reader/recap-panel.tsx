@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { History, RotateCw, X } from "lucide-react";
+import { RotateCw, X } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { Pos } from "@/lib/anchors";
@@ -16,7 +16,7 @@ const SAME_SPOT_PARAS = 5;
 
 const isAhead = (pos: Pos, of: Pos) => pos.section > of.section || (pos.section === of.section && pos.para - of.para > SAME_SPOT_PARAS);
 
-/** "The story so far", up to where you are. */
+/** Recap: the book so far, up to where you are. */
 export function RecapPanel({
   bookId,
   position,
@@ -29,7 +29,7 @@ export function RecapPanel({
   position: Pos | null;
   onJump: (pos: Pos) => void;
   onClose: () => void;
-  /** Switch to asking the book; without it, the tabs are hidden. */
+  /** Switch to Ask; without it, the tabs are hidden. */
   onSwitch?: (p: "ask" | "recap") => void;
 }) {
   const request = useMutation(api.recaps.request);
@@ -59,26 +59,24 @@ export function RecapPanel({
   const error = failed || recap?.status === "error";
 
   return (
-    <Sheet title="The story so far" variant="side" onClose={onClose}>
-      {onSwitch && <CompanionTabs current="recap" onSwitch={onSwitch} />}
+    <Sheet title="Recap" heading={onSwitch && <CompanionTabs current="recap" onSwitch={onSwitch} />} variant="side" onClose={onClose}>
       <SheetBody>
         {error ? (
           <Failed message="Couldn't write the recap." onRetry={() => again(true)} />
         ) : recap?.status === "ready" && recap.text ? (
           <>
             <Answer text={recap.text} onCite={jump} />
-            <div className="mt-6 flex flex-col items-start gap-3 border-t border-border pt-4">
-              <p className="text-xs leading-4 text-muted-foreground">Based only on the pages you&apos;ve read.</p>
-              {position && isAhead(position, recap.upTo) && (
+            {position && isAhead(position, recap.upTo) && (
+              <div className="mt-6 border-t border-border pt-4">
                 <Btn size="sm" icon={<RotateCw />} onClick={() => again(true)}>
                   Update to this page
                 </Btn>
-              )}
-            </div>
+              </div>
+            )}
           </>
         ) : (
           <>
-            <Loading label={position ? "Writing the recap…" : "Loading…"} lines={4} />
+            <Loading label={position ? "Writing the recap…" : "Loading…"} />
             <p className="mt-6 text-xs leading-4 text-muted-foreground">The first recap of a book takes about a minute. Later ones are quicker.</p>
           </>
         )}
@@ -113,7 +111,7 @@ export function RecapNudge({ openedAt, onOpen }: { openedAt: number | null | und
     <div className="pointer-events-none absolute inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 flex justify-center px-4">
       <div
         role="status"
-        className="pointer-events-auto flex animate-in items-center gap-1 rounded-xl border border-border bg-popover p-1 text-sm shadow-md shadow-black/6 duration-300 fade-in slide-in-from-bottom-2"
+        className="pointer-events-auto flex animate-in items-center gap-1 rounded-xl border border-border bg-popover p-1 text-sm shadow-md shadow-black/8 duration-200 fade-in"
       >
         <button
           type="button"
@@ -121,10 +119,9 @@ export function RecapNudge({ openedAt, onOpen }: { openedAt: number | null | und
             setDismissed(true);
             onOpen();
           }}
-          className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg px-3 font-medium transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60 pointer-coarse:h-11 [&_svg]:size-4"
+          className="inline-flex h-9 cursor-pointer items-center rounded-lg px-3 font-medium transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60 pointer-coarse:h-11"
         >
-          <History className="text-muted-foreground" />
-          Recap the story so far
+          Recap
         </button>
         <IconBtn label="Dismiss" onClick={() => setDismissed(true)}>
           <X />

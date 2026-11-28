@@ -9,7 +9,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-label="Keyboard shortcuts"
-        className="flex max-h-[85dvh] w-full max-w-md flex-col rounded-xl border border-border bg-popover text-popover-foreground shadow-lg shadow-black/8"
+        className="flex max-h-[85dvh] w-full max-w-md flex-col rounded-xl border border-border bg-popover text-popover-foreground shadow-md shadow-black/8"
         onClick={(e) => e.stopPropagation()}
       >
         <SheetHeader title="Keyboard shortcuts" onClose={onClose} />

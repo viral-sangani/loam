@@ -26,10 +26,25 @@ const TONE = {
   ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",
 } as const;
 
+type BtnStyle = { tone?: keyof typeof TONE; size?: "sm" | "md"; icon?: boolean; className?: string };
+
+/** Btn's classes, for a link that looks like one. */
+export function btnClass({ tone = "quiet", size = "md", icon, className }: BtnStyle = {}) {
+  return cn(
+    base,
+    TONE[tone],
+    "gap-2 rounded-lg text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
+    size === "md" ? "h-9 px-3.5" : "h-8 px-3",
+    "pointer-coarse:h-11 pointer-coarse:px-4",
+    icon && (size === "md" ? "pl-3" : "pl-2.5"),
+    className,
+  );
+}
+
 /** A labelled button: primary (one per view), quiet (outlined), or ghost. Icons go first, at 16px. */
 export function Btn({
-  tone = "quiet",
-  size = "md",
+  tone,
+  size,
   icon,
   className,
   children,
@@ -37,19 +52,7 @@ export function Btn({
   ...props
 }: ButtonProps & { tone?: keyof typeof TONE; size?: "sm" | "md"; icon?: ReactNode }) {
   return (
-    <button
-      type={type}
-      className={cn(
-        base,
-        TONE[tone],
-        "gap-2 rounded-lg text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
-        size === "md" ? "h-9 px-3.5" : "h-8 px-3",
-        "pointer-coarse:h-11 pointer-coarse:px-4",
-        icon && (size === "md" ? "pl-3" : "pl-2.5"),
-        className,
-      )}
-      {...props}
-    >
+    <button type={type} className={btnClass({ tone, size, icon: !!icon, className })} {...props}>
       {icon}
       {children}
     </button>

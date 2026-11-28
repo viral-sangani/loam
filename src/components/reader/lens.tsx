@@ -123,7 +123,7 @@ export function Lens({
       role="toolbar"
       aria-label="Selection"
       style={{ visibility: "hidden" }}
-      className="fixed z-30 max-w-[calc(100vw-1rem-env(safe-area-inset-left)-env(safe-area-inset-right))] animate-in rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg shadow-black/8 duration-150 fade-in zoom-in-95"
+      className="fixed z-30 max-w-[calc(100vw-1rem-env(safe-area-inset-left)-env(safe-area-inset-right))] animate-in rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-md shadow-black/8 duration-150 fade-in"
     >
       {mode === "actions" ? (
         <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 pointer-coarse:gap-x-2 short:gap-x-1">

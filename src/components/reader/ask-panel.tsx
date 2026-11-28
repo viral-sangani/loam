@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowUp, Trash2 } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { Anchor, Pos } from "@/lib/anchors";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Answer } from "./answer";
 import { IconBtn, field } from "./kit";
 import { keepKeys, type AskKind } from "./lens";
+import { DeleteButton } from "./panel-bits";
 import { Failed, Loading, Quote, Sheet, SheetBody, SheetFooter } from "./sheet";
 
 /** A stretch of the book being asked about. */
@@ -21,8 +22,6 @@ const QUESTION: Record<Exclude<AskKind, "ask">, string> = {
   define: "What does this word mean here?",
   simplify: "Can you say it more simply?",
 };
-
-const TITLE: Record<AskKind, string> = { explain: "Explain", define: "Define", simplify: "Simplify", ask: "Question" };
 
 type Entry = { key: number; kind: AskKind; question: string; id: Id<"asks"> | null; failed: boolean };
 type Thread = { passage: Passage; entries: Entry[] };
@@ -99,10 +98,9 @@ export function AskPanel({ asks, onCite, onClose }: { asks: AskThread; onCite: (
   }, [count]);
 
   if (!thread) return null;
-  const first = thread.entries[0];
 
   return (
-    <Sheet title={first ? TITLE[first.kind] : "About this passage"} variant="side" onClose={onClose}>
+    <Sheet title="About this passage" variant="side" onClose={onClose}>
       <SheetBody className="space-y-6">
         <Quote text={thread.passage.quote} className="line-clamp-6" />
         {thread.entries.map((e) => (
@@ -157,17 +155,15 @@ function AskEntry({ entry, onCite, onResend, onDelete }: { entry: Entry; onCite:
     <section className="space-y-2 border-t border-border pt-5">
       <div className="flex items-start justify-between gap-3">
         <p className="min-w-0 pt-1 text-base leading-6 font-medium pointer-coarse:pt-2.5">{ask?.question ?? entry.question}</p>
-        <IconBtn
-          size="sm"
-          label="Delete answer"
-          className="-mr-2"
-          onClick={() => {
-            if (entry.id) void remove({ askId: entry.id }).catch(() => {});
-            onDelete();
-          }}
-        >
-          <Trash2 />
-        </IconBtn>
+        <div className="-mr-2">
+          <DeleteButton
+            label="Delete question"
+            onDelete={() => {
+              if (entry.id) void remove({ askId: entry.id }).catch(() => {});
+              onDelete();
+            }}
+          />
+        </div>
       </div>
       {failed ? (
         <Failed

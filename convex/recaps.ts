@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { ownBook } from "./books";
-import { chatText } from "./llm";
+import { STYLE, chatText } from "./llm";
 import { vPos } from "./schema";
 import { label } from "./text";
 
@@ -28,7 +28,7 @@ export const get = query({
   },
 });
 
-/** "The story so far", up to `upTo`. Reuses a recent recap made from about the same spot. */
+/** A recap of the book up to `upTo`. Reuses a recent recap made from about the same spot. */
 export const request = mutation({
   args: { bookId: v.id("books"), upTo: vPos, fresh: v.optional(v.boolean()) },
   handler: async (ctx, { bookId, upTo, fresh }) => {
@@ -106,14 +106,15 @@ const SUMMARY = `Summarize this section of a book for a reader's memory aid, in 
 who appears, what happens, and anything set up for later. Use names. No commentary, no headings.
 If it is front or back matter (contents, copyright, acknowledgements), reply with just: -`;
 
-const RECAP = `You write "the story so far" for a reader coming back to a book.
+const RECAP = `You write a recap for a reader coming back to a book.
 You get summaries of the sections they have finished, then the text of the section they are in, up to where they stopped,
 one paragraph per line with labels like [¶12.4].
 Write plain Markdown, about 150 to 250 words:
 1. One or two short paragraphs: the story (or argument) so far, oldest to newest, with more detail on recent events.
 2. A line starting with "**Where you left off:**" describing the last scene or point in 1 or 2 sentences, citing its paragraph label.
-3. If the book has characters, "**Who's who:**" followed by up to 5 "- Name: one line" bullets.
-Never mention or hint at anything after where the reader stopped.`;
+3. Only if more than three named characters have appeared, "**Who's who:**" followed by up to 5 "- Name: one line" bullets.
+Never mention or hint at anything after where the reader stopped.
+${STYLE}`;
 
 async function summarize(title: string, s: { section: number; text: string }) {
   // Very long sections are trimmed to their opening and close; a summary doesn't need every word.
@@ -151,7 +152,7 @@ export const build = internalAction({
       await ctx.runMutation(internal.recaps.store, { recapId, text });
     } catch (e) {
       console.error(e);
-      await ctx.runMutation(internal.recaps.store, { recapId, error: "Couldn't write a recap. Try again." });
+      await ctx.runMutation(internal.recaps.store, { recapId, error: "Couldn't write the recap." });
     }
   },
 });

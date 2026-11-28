@@ -34,7 +34,6 @@ export function ContentsPanel({
               )}
             >
               <span className="min-w-0 flex-1">{t.label}</span>
-              {i === current && <span className="shrink-0 text-xs font-normal text-muted-foreground">Current</span>}
             </button>
           ))}
         </nav>

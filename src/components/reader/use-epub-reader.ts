@@ -9,7 +9,6 @@ import type { Pos } from "@/lib/anchors";
 import { paragraphElements, wordRange } from "@/lib/book-text";
 import {
   getLocations,
-  loadBookFile,
   loadPrefs,
   saveLocations,
   savePrefs,
@@ -18,6 +17,7 @@ import {
   type ReaderPrefs,
   type ReaderTheme,
 } from "@/lib/library";
+import { bookFile, type Handoff } from "@/lib/open-book";
 import { INK, flatten, type Entry } from "./config";
 import { paint, paragraphAt, paragraphsOf } from "./highlights";
 
@@ -172,15 +172,17 @@ function themeRules() {
 }
 
 /**
- * Loads a book from the shelf into `viewRef`, and owns everything about the reading position:
+ * Loads a book from the library into `viewRef`, and owns everything about the reading position:
  * the saved spot, the current chapter, progress, and text settings. `start`, if given, opens the
- * book at that paragraph instead of the saved spot.
+ * book at that paragraph instead of the saved spot. `handoff` (from the library) lets the file
+ * load and the page lay out before the book's query answers.
  */
 export function useEpubReader(
   id: Id<"books">,
   viewRef: RefObject<HTMLDivElement | null>,
   events: RefObject<FrameEvents>,
   start: Pos | null = null,
+  handoff: Handoff | null = null,
 ) {
   const book = useQuery(api.books.get, { bookId: id });
   const saveProgressMutation = useMutation(api.books.saveProgress);
@@ -282,28 +284,36 @@ export function useEpubReader(
   }, []);
 
   const missing = book === null;
-  const epub = book?.epub;
-  const epubUrl = book?.epubUrl;
+  const epub = book?.epub ?? handoff?.epub;
+  const epubUrl = book?.epubUrl ?? handoff?.epubUrl;
+  const urlRef = useRef(epubUrl);
+  useEffect(() => {
+    if (epubUrl) urlRef.current = epubUrl;
+  }, [epubUrl]);
   // Where the book was left, captured once: later progress saves must not re-position the reader.
   const savedCfi = useRef<string | null>(null);
+  const cfiWaiters = useRef<(() => void)[]>([]);
+  const knownCfi = book ? (book.progress?.cfi ?? "") : (handoff?.cfi ?? null);
   useEffect(() => {
-    if (book && savedCfi.current === null) savedCfi.current = book.progress?.cfi ?? "";
-  }, [book]);
+    if (knownCfi === null || savedCfi.current !== null) return;
+    savedCfi.current = knownCfi;
+    cfiWaiters.current.splice(0).forEach((fn) => fn());
+  }, [knownCfi]);
 
   useEffect(() => {
     if (missing) setStatus("missing"); // eslint-disable-line react-hooks/set-state-in-effect -- mirrors the query result
   }, [missing]);
 
   useEffect(() => {
-    if (!epub || !epubUrl) return;
+    const url = urlRef.current;
+    if (!epub || !url) return;
     let cancelled = false;
     let locating: Promise<unknown> | null = null;
 
     (async () => {
-      const data = await loadBookFile(epub, epubUrl);
+      const [data, mod] = await Promise.all([bookFile(epub, url), import("epubjs")]);
       if (cancelled) return;
 
-      const mod = await import("epubjs");
       const cfiTool: EpubCFI = new mod.EpubCFI();
       const book = mod.default(data);
       bookRef.current = book;
@@ -454,6 +464,8 @@ export function useEpubReader(
         }
       });
 
+      if (savedCfi.current === null) await new Promise<void>((r) => cfiWaiters.current.push(r));
+      if (cancelled) return;
       anchorRef.current = savedCfi.current || null;
       const opened = startRef.current && (await goTo(startRef.current));
       if (!opened) await rendition.display(anchorRef.current || undefined);
@@ -500,7 +512,7 @@ export function useEpubReader(
       bookRef.current = null;
       anchorRef.current = null;
     };
-  }, [id, epub, epubUrl, viewRef, events, next, prev, flush, saveSoon, goTo]);
+  }, [id, epub, viewRef, events, next, prev, flush, saveSoon, goTo]);
 
   // Turning a phone sideways switches to two pages (and back); then return to the reading spot,
   // since changing the page layout moves the text.

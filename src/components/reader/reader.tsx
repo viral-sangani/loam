@@ -8,6 +8,7 @@ import type { Contents } from "epubjs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Id } from "@convex/_generated/dataModel";
 import type { Pos } from "@/lib/anchors";
+import { takeHandoff, warmBook, type Handoff } from "@/lib/open-book";
 import { cn } from "@/lib/utils";
 import { AskPanel, useAskThread, type Passage } from "./ask-panel";
 import { AudioBar } from "./audio-bar";
@@ -42,17 +43,23 @@ function spotFrom(params: URLSearchParams): Pos | null {
 }
 
 export function Reader() {
+  const id = useParams<{ id: string }>().id as Id<"books">;
   const { isLoading, isAuthenticated } = useConvexAuth();
   const router = useRouter();
+  // Start on the book file while sign-in is confirmed.
+  const [handoff] = useState(() => {
+    const h = takeHandoff(id);
+    if (h) warmBook(h.epub, h.epubUrl);
+    return h;
+  });
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/");
   }, [isLoading, isAuthenticated, router]);
   if (!isAuthenticated) return null;
-  return <BookReader />;
+  return <BookReader id={id} handoff={handoff} />;
 }
 
-function BookReader() {
-  const id = useParams<{ id: string }>().id as Id<"books">;
+function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null }) {
   const router = useRouter();
   const params = useSearchParams();
   const spot = useMemo(() => spotFrom(params), [params]);
@@ -67,7 +74,7 @@ function BookReader() {
     swipe: () => {},
     relocated: () => {},
   });
-  const reader = useEpubReader(id, viewRef, events, openAt);
+  const reader = useEpubReader(id, viewRef, events, openAt, handoff);
   const { meta, status, toc, chapterIdx, pagesLeft, percent, prefs, updatePrefs, next, prev, goChapter, jumpTo, goTo, position, flush } = reader;
 
   const [panel, setPanel] = useState<Panel | null>(null);
@@ -299,9 +306,9 @@ function BookReader() {
             )}
             {status === "missing" && (
               <p className="text-center text-sm text-muted-foreground">
-                This book is no longer on your shelf.{" "}
+                This book is no longer in your library.{" "}
                 <Link href="/" className="font-medium text-primary underline underline-offset-4">
-                  Back to shelf
+                  Back to library
                 </Link>
               </p>
             )}
@@ -333,7 +340,7 @@ function BookReader() {
           }}
         />
       )}
-      {panel === "type" && <SettingsPanel prefs={prefs} onChange={updatePrefs} onClose={closePanel} />}
+      {panel === "type" && <SettingsPanel prefs={prefs} onChange={updatePrefs} onClose={closePanel} onShortcuts={() => togglePanel("keys")} />}
       {panel === "keys" && <ShortcutsDialog onClose={closePanel} />}
       {panel === "notebook" && <NotebookPanel bookId={id} toc={toc} onJump={jump} onClose={closePanel} />}
       {panel === "ask" && (

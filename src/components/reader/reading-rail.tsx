@@ -14,7 +14,6 @@ type Segment = { index: number; start: number; size: number; paragraphs: number 
 /** Ticks closer than this (as a fraction of the book) share one mark, so a dense book stays a few hundred nodes. */
 const BUCKETS = 500;
 
-
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
 function layout(outline: { index: number; words: number; paragraphs: number }[]): Segment[] {
@@ -50,7 +49,7 @@ function posAt(segs: Segment[], f: number): Pos {
 
 /**
  * A minimap of the whole book along the right edge: sections sized by length, ticks for your
- * highlights and for the AI-marked terms, and where you are (and where the narration is).
+ * highlights and for the AI-marked terms, and where you are.
  * Hover to see the chapter, click or drag to travel there.
  *
  * Desktop and tablet only: on a phone the side margin is a sliver and the bottom already holds the
@@ -59,7 +58,6 @@ function posAt(segs: Segment[], f: number): Pos {
 export function ReadingRail({
   bookId,
   position,
-  audioPos = null,
   labels,
   onJump,
   visible,
@@ -67,8 +65,6 @@ export function ReadingRail({
   bookId: Id<"books">;
   /** The reader's paragraph. */
   position: Pos | null;
-  /** Where the narration is, when the audiobook is playing in sync. */
-  audioPos?: Pos | null;
   /** Section index → chapter title, for the hover label. */
   labels?: Record<number, string>;
   onJump: (pos: Pos) => void;
@@ -119,7 +115,6 @@ export function ReadingRail({
   if (!segs.length) return null;
 
   const here = position ? fractionOf(segs, position) : null;
-  const heard = audioPos ? fractionOf(segs, audioPos) : null;
   const shown = visible || dragging;
 
   const fractionAt = (clientY: number) => {
@@ -234,14 +229,6 @@ export function ReadingRail({
           />
         ))}
 
-        {heard !== null && (
-          <div
-            aria-hidden
-            title="Narration"
-            className="absolute left-1/2 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-clay ring-2 ring-background motion-safe:transition-[top] motion-safe:duration-300"
-            style={top(heard)}
-          />
-        )}
         {here !== null && (
           <div
             aria-hidden
@@ -255,7 +242,7 @@ export function ReadingRail({
             <div aria-hidden className="absolute -inset-x-[4px] h-px bg-foreground" style={top(hover)} />
             <div
               aria-hidden
-              className="pointer-events-none absolute right-full mr-3 flex max-w-64 -translate-y-1/2 items-baseline gap-2 rounded-md border border-border bg-popover px-2 py-1 whitespace-nowrap text-popover-foreground shadow-sm shadow-black/5"
+              className="pointer-events-none absolute right-full mr-3 flex max-w-64 -translate-y-1/2 items-baseline gap-2 rounded-md border border-border bg-popover px-2 py-1 whitespace-nowrap text-popover-foreground"
               style={top(hover)}
             >
               {hoverChapter && <span className="min-w-0 truncate text-xs">{hoverChapter}</span>}

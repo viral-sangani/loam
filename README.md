@@ -1,26 +1,29 @@
 # Loam
 
-A quiet, immersive place to read. Add an EPUB and its audiobook; Loam highlights each word as it is
-narrated, and underlines terms worth a closer look. Tap one for a quick briefing (summary, picture,
-one-liners, what it means in this passage, a video and a Wikipedia link) in a side panel.
+An EPUB reader with audiobook sync and an AI reading companion.
+
+Add an EPUB and its audiobook. Loam highlights each word as it is narrated and underlines terms
+worth a closer look. Tap one for a short briefing: a summary, a picture, what it refers to in this
+passage, and a video or Wikipedia link when there is one.
 
 ## How it works
 
-- **Next.js app** (`src/`): shelf, sign-in, and the reader (epub.js). Highlights are painted with the
-  CSS Custom Highlight API, so the book's markup never changes.
+- **Next.js app** (`src/`): sign-in, the library (a list of your books), and the reader (epub.js).
+  Highlights are painted with the CSS Custom Highlight API, so the book's markup never changes.
 - **Convex** (`convex/`): accounts (username + password via Convex Auth), books, files, reading
   progress, word timings, terms and briefings. Syncs across devices.
 - **Term finding** (`convex/terms.ts`): after upload, a background job sends the text, chapter by
   chapter, to a cheap model (GPT-6 Luna by default) to pick terms worth explaining.
 - **Briefings** (`convex/briefs.ts`): built on first tap and cached. Wikipedia supplies the summary,
-  image and link; the model writes the one-liners and the passage context.
-- **Reading companions** (`convex/asks.ts`, `recaps.ts`, `marks.ts`, `review.ts`, `notebook.ts`):
-  select any passage to highlight it, add a note, or ask (Explain, Define, Simplify, or your own
-  question); ask about the whole book so far; read "the story so far" when coming back. Answers only
-  see the text up to where you are (no spoilers) and cite paragraphs you can jump to. Everything you
-  mark, ask and look up collects in a notebook (exports to Markdown), and a daily review on the shelf
-  brings highlights and looked-up terms back, spaced out like flashcards. A reading map on the right
-  edge shows the whole book with your highlights.
+  image and link; the model writes the passage context.
+- **Reading companion** (`convex/asks.ts`, `recaps.ts`, `marks.ts`, `review.ts`, `notebook.ts`).
+  Answers only see the text up to where you are (no spoilers) and cite paragraphs you can jump to.
+  - Select a passage to highlight it, add a note, or ask about it (Explain, Define, Simplify, or your own question).
+  - **Ask**: questions about the book so far.
+  - **Recap**: a recap up to where you are, offered when you come back to a book.
+  - **Notebook**: everything you highlight, ask and look up, in reading order. Exports to Markdown.
+  - **Daily review**: highlights and terms come back in the library, spaced out like flashcards.
+  - **Reading map**: the whole book along the right edge, with your highlights.
 - **Aligner** (`worker/`): runs on your machine. It transcribes the audiobook with whisper.cpp
   (free, local) and matches the spoken words to the book's words, giving every word a start time.
 
@@ -37,7 +40,7 @@ npx convex env set WORKER_SECRET <random string> # shared with the aligner
 echo "WORKER_SECRET=<same random string>" >> .env.local
 # optional
 npx convex env set LLM_MODEL gpt-6-luna           # default
-npx convex env set YOUTUBE_API_KEY <key>          # embed videos; without it the panel links to a YouTube search
+npx convex env set YOUTUBE_API_KEY <key>          # embed a video in briefings
 ```
 
 ## Run
@@ -61,5 +64,5 @@ prod Convex URL so it serves the live site.
 
 ## Reader shortcuts
 
-`← →` / `Space` pages · `[ ]` chapters · `C` contents · `M` notebook · `Q` ask the book · `R` story so
-far · `A` audiobook · `K` play/pause · `−` `=` text size · `N` paper/sepia/night · `P` progress · `?` all shortcuts
+`← →` / `Space` pages · `[ ]` chapters · `C` contents · `M` notebook · `Q` ask · `R` recap ·
+`A` audiobook · `K` play/pause · `−` `=` text size · `N` next theme · `P` progress · `?` keyboard shortcuts

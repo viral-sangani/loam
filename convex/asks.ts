@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { ownBook } from "./books";
-import { chatText } from "./llm";
+import { STYLE, chatText } from "./llm";
 import { vAnchor, vPos } from "./schema";
 import { paragraphsOf, quoteOf, textBefore } from "./text";
 
@@ -14,20 +14,21 @@ const QUESTIONS = {
 } as const;
 
 const TASK: Record<"explain" | "define" | "simplify" | "ask" | "book", string> = {
-  explain: "Explain what the selected passage means here, and why it is here in the book. 2 short paragraphs at most.",
+  explain: "Explain what the passage means in context, in one short paragraph. Add a second only if the passage is dense.",
   define: "Define the selected word or phrase as this author uses it here, in 1 to 3 sentences. Mention a plainer synonym if there is one.",
   simplify: "Say the same thing as the selected passage in plain, modern words. Keep it about as long as the original.",
   ask: "Answer the reader's question about the selected passage.",
-  book: "Answer the reader's question about the book so far.",
+  book: "Answer the reader's question about the book so far. Under 120 words unless the question asks for a list.",
 };
 
 const SYSTEM = `You are a reading companion inside an e-book reader. You get the book's text up to where the reader is,
 one paragraph per line, each starting with a label like [¶12.4] (section 12, paragraph 4).
 Rules:
-- Answer from the text. Cite the paragraphs you rely on with their labels exactly, e.g. [¶12.4], right after the claim. Use general knowledge only to explain words, history and references, never to tell what happens later.
+- Answer from the text. Cite the paragraphs you rely on with their labels exactly, e.g. [¶12.4], right after the claim: 1 to 3 paragraphs per answer, at most one citation per sentence. Use general knowledge only to explain words, history and references, never to tell what happens later.
 - Never reveal, hint at or speculate about anything after the reader's position: no spoilers. If the answer depends on what comes later, say it isn't clear yet.
-- Be brief and concrete. Plain Markdown only: short paragraphs, "- " lists if needed, **bold** sparingly. No headings.
-- Wrap the single most important sentence of your answer in ==double equals== once, so a skimmer can stop there.`;
+- Be brief and concrete. Plain Markdown only: short paragraphs, "- " lists if needed, **bold** sparingly.
+- Only if the answer is longer than three sentences, wrap its single most important sentence in ==double equals==, once.
+${STYLE}`;
 
 export const list = query({
   args: { bookId: v.id("books") },
@@ -157,7 +158,7 @@ export const answer = internalAction({
       await ctx.runMutation(internal.asks.store, { askId, answer });
     } catch (e) {
       console.error(e);
-      await ctx.runMutation(internal.asks.store, { askId, error: "Couldn't get an answer. Try again." });
+      await ctx.runMutation(internal.asks.store, { askId, error: "Couldn't get an answer." });
     }
   },
 });

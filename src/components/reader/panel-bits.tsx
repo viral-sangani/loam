@@ -47,16 +47,16 @@ export function DeleteButton({ label, onDelete }: { label: string; onDelete: () 
   );
 }
 
-/** Switch between asking the book and the story so far: two views of the same companion. */
+/** Ask and Recap, two views of the same companion, as tabs in the panel's header. */
 export function CompanionTabs({ current, onSwitch }: { current: "ask" | "recap"; onSwitch: (p: "ask" | "recap") => void }) {
   return (
     <Segmented
       tabs
       label="Companion"
-      className="mx-5 mb-4 shrink-0"
+      className="max-w-64 min-w-0 flex-1"
       options={[
         ["ask", "Ask"],
-        ["recap", "Story so far"],
+        ["recap", "Recap"],
       ]}
       value={current}
       onChange={onSwitch}

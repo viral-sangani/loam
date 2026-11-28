@@ -91,6 +91,8 @@ export const list = query({
         addedAt: b.addedAt,
         openedAt: b.openedAt ?? null,
         progress: b.progress ?? null,
+        epub: b.epub,
+        epubUrl: await ctx.storage.getUrl(b.epub),
         coverUrl: b.cover ? await ctx.storage.getUrl(b.cover) : null,
         terms: b.terms,
         audio: b.audio
@@ -273,7 +275,8 @@ export const setDescription = mutation({
   args: { bookId: v.id("books"), description: v.string() },
   handler: async (ctx, { bookId, description }) => {
     await ownBook(ctx, bookId);
-    await ctx.db.patch(bookId, { description: description.trim().slice(0, 4000) || undefined });
+    // An empty string records that the EPUB has no blurb, so it isn't read again.
+    await ctx.db.patch(bookId, { description: description.trim().slice(0, 4000) });
   },
 });
 

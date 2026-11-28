@@ -15,11 +15,14 @@ import { Btn, IconBtn } from "./kit";
  */
 export function Sheet({
   title,
+  heading,
   variant,
   onClose,
   children,
 }: {
   title: string;
+  /** Shown in the header instead of the title (the companion's tabs); the title still names the panel. */
+  heading?: React.ReactNode;
   variant: "side" | "popover";
   onClose: () => void;
   children: React.ReactNode;
@@ -35,22 +38,22 @@ export function Sheet({
         role="dialog"
         aria-label={title}
         className={cn(
-          "absolute inset-x-0 bottom-0 z-40 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-border bg-card text-card-foreground pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.18)]",
+          "absolute inset-x-0 bottom-0 z-40 flex max-h-[85dvh] flex-col rounded-t-xl border-t border-border bg-card text-card-foreground pb-[env(safe-area-inset-bottom)]",
           "animate-in slide-in-from-bottom-8 fade-in duration-200 sm:animate-none short:animate-none",
           // Tablets, desktops and sideways phones: a full-height panel on the right. Its width grows by
           // the notch on that side (sideways phones), so the content keeps its 24rem.
           variant === "side" && [
-            "sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:w-full sm:max-w-[calc(24rem+env(safe-area-inset-right))] sm:rounded-none sm:border-t-0 sm:border-l sm:pt-[env(safe-area-inset-top)] sm:pr-[env(safe-area-inset-right)] sm:shadow-[-8px_0_24px_-16px_rgb(0_0_0/0.18)]",
-            "short:inset-y-0 short:right-0 short:left-auto short:max-h-none short:w-full short:max-w-[calc(min(24rem,62vw)+env(safe-area-inset-right))] short:rounded-none short:border-t-0 short:border-l short:pt-0 short:pr-[env(safe-area-inset-right)] short:shadow-[-8px_0_24px_-16px_rgb(0_0_0/0.18)]",
+            "sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:w-full sm:max-w-[calc(24rem+env(safe-area-inset-right))] sm:rounded-none sm:border-t-0 sm:border-l sm:pt-[env(safe-area-inset-top)] sm:pr-[env(safe-area-inset-right)]",
+            "short:inset-y-0 short:right-0 short:left-auto short:max-h-none short:w-full short:max-w-[calc(min(24rem,62vw)+env(safe-area-inset-right))] short:rounded-none short:border-t-0 short:border-l short:pt-0 short:pr-[env(safe-area-inset-right)]",
           ],
           // A card under the top bar's right end, never taller than the screen below the bar.
           variant === "popover" && [
-            "sm:top-[calc(3.5rem+env(safe-area-inset-top))] sm:right-[max(1rem,calc(env(safe-area-inset-right)+0.5rem))] sm:bottom-auto sm:left-auto sm:max-h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-1rem)] sm:w-80 sm:rounded-xl sm:border sm:pb-0 sm:shadow-lg sm:shadow-black/8",
-            "short:top-[3.25rem] short:right-[max(0.5rem,calc(env(safe-area-inset-right)+0.5rem))] short:bottom-auto short:left-auto short:max-h-[calc(100dvh-3.25rem-max(0.5rem,env(safe-area-inset-bottom)))] short:w-80 short:rounded-xl short:border short:pb-0 short:shadow-lg short:shadow-black/8",
+            "sm:top-[calc(3.5rem+env(safe-area-inset-top))] sm:right-[max(1rem,calc(env(safe-area-inset-right)+0.5rem))] sm:bottom-auto sm:left-auto sm:max-h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-1rem)] sm:w-80 sm:rounded-xl sm:border sm:pb-0 sm:shadow-md sm:shadow-black/8",
+            "short:top-[3.25rem] short:right-[max(0.5rem,calc(env(safe-area-inset-right)+0.5rem))] short:bottom-auto short:left-auto short:max-h-[calc(100dvh-3.25rem-max(0.5rem,env(safe-area-inset-bottom)))] short:w-80 short:rounded-xl short:border short:pb-0 short:shadow-md short:shadow-black/8",
           ],
         )}
       >
-        <SheetHeader title={title} onClose={onClose} className={cn(variant === "popover" && "sm:hidden short:hidden")} />
+        <SheetHeader title={title} heading={heading} onClose={onClose} className={cn(variant === "popover" && "sm:hidden short:hidden")} />
         {children}
       </section>
     </>
@@ -58,10 +61,20 @@ export function Sheet({
 }
 
 /** Title on the left, close on the right, both centred on one 56px line. */
-export function SheetHeader({ title, onClose, className }: { title: string; onClose: () => void; className?: string }) {
+export function SheetHeader({
+  title,
+  heading,
+  onClose,
+  className,
+}: {
+  title: string;
+  heading?: React.ReactNode;
+  onClose: () => void;
+  className?: string;
+}) {
   return (
     <header className={cn("flex h-14 shrink-0 items-center justify-between gap-3 pr-3 pl-5 pointer-coarse:pr-2", className)}>
-      <h2 className="min-w-0 truncate text-lg leading-7 font-semibold tracking-tight">{title}</h2>
+      {heading ?? <h2 className="min-w-0 truncate text-lg leading-7 font-semibold tracking-tight">{title}</h2>}
       <IconBtn label="Close" onClick={onClose} className="-my-1">
         <X />
       </IconBtn>
@@ -111,17 +124,12 @@ export function Quote({ text, color, onClick, className }: { text: string; color
   );
 }
 
-/** Placeholder lines while something loads or the AI writes. */
-export function Loading({ label = "Loading…", lines = 3, className }: { label?: string; lines?: number; className?: string }) {
+/** One line while something loads or the AI writes. */
+export function Loading({ label = "Loading…", className }: { label?: string; className?: string }) {
   return (
-    <div className={cn("space-y-3", className)} aria-busy="true" role="status">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <div className="space-y-2.5">
-        {Array.from({ length: lines }, (_, i) => (
-          <div key={i} className="h-3 rounded-sm bg-muted motion-safe:animate-pulse" style={{ width: `${[94, 82, 64, 88][i % 4]}%` }} />
-        ))}
-      </div>
-    </div>
+    <p role="status" className={cn("text-sm text-muted-foreground", className)}>
+      {label}
+    </p>
   );
 }
 
@@ -146,26 +154,6 @@ export function Empty({ title, children, className }: { title: string; children?
       <p className="text-base font-medium">{title}</p>
       {children && <div className="mt-3 text-sm text-muted-foreground">{children}</div>}
     </div>
-  );
-}
-
-/** A row with a 16px icon centred on the first line of its text. */
-export function IconLine({
-  icon: Icon,
-  children,
-  className,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <li className={cn("flex gap-3 text-sm leading-5", className)}>
-      <span className="flex h-5 shrink-0 items-center">
-        <Icon className="size-4 text-muted-foreground" />
-      </span>
-      <span className="min-w-0">{children}</span>
-    </li>
   );
 }
 

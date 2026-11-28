@@ -4,18 +4,18 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { BookOpen, Check } from "lucide-react";
 import { api } from "@convex/_generated/api";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Btn, btnClass } from "@/components/reader/kit";
+import { Quote } from "@/components/reader/sheet";
 
 type Item = FunctionReturnType<typeof api.review.today>["items"][number];
 
-/** How long "That's today's review" stays before the desk folds away. */
+/** How long "Done for today." stays before the desk folds away. */
 const END_MS = 4000;
 
 /**
- * The daily review on the shelf: one highlight or looked-up term at a time, spaced out like
- * flashcards. Keep brings it back later, Done retires it. Nothing at all when nothing is due.
+ * The daily review in the library: one highlight or term at a time, spaced out like flashcards.
+ * "Show again later" brings it back later, "Done" retires it. Nothing at all when nothing is due.
  */
 export function ReviewDesk() {
   const review = useQuery(api.review.today, {});
@@ -55,45 +55,36 @@ export function ReviewDesk() {
   };
 
   return (
-    <section aria-label="Daily review" className="mb-8 rounded-2xl border border-border/70 bg-card/70 px-5 py-4 sm:mb-10 sm:px-6 sm:py-5">
-      <header className="mb-3 flex items-baseline justify-between gap-4 text-[11px] text-muted-foreground">
-        <span className="tracking-wide uppercase">Today&apos;s review</span>
+    <section aria-label="Daily review" className="mb-8 rounded-lg border border-border bg-card px-5 py-4 sm:mb-10 sm:px-6 sm:py-5">
+      <header className="mb-3 flex items-baseline justify-between gap-4 text-xs font-medium text-muted-foreground">
+        <span>Today&apos;s review</span>
         {remaining > 1 && <span className="tabular-nums">{remaining - 1} more today</span>}
       </header>
 
       {finished ? (
-        <p className="flex items-center gap-2 py-1 font-serif text-muted-foreground italic motion-safe:animate-in motion-safe:fade-in">
-          <Check className="size-4 text-primary" /> That&apos;s today&apos;s review.
-        </p>
+        <p className="py-1 text-sm text-muted-foreground">Done for today.</p>
       ) : item ? (
-        <div key={item.id} className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300">
+        <div key={item.id} className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
           <Card item={item} />
-          <div className="mt-4 flex items-center justify-between gap-2">
-            <Link
-              href={`/read/${item.bookId}?s=${item.section}&p=${item.para}`}
-              className={buttonVariants({ variant: "ghost", size: "sm", className: "-ml-2 text-muted-foreground pointer-coarse:h-11 pointer-coarse:px-3" })}
-            >
-              <BookOpen /> Open in book
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <Link href={`/read/${item.bookId}?s=${item.section}&p=${item.para}`} className={btnClass({ tone: "ghost", size: "sm", className: "-ml-3" })}>
+              Open in book
             </Link>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                title="Retire it from the review"
-                className="text-muted-foreground pointer-coarse:h-11 pointer-coarse:px-3"
-                onClick={() => act("done", item)}
-              >
+            <div className="flex items-center gap-1 pointer-coarse:gap-2">
+              <Btn tone="ghost" size="sm" onClick={() => act("done", item)}>
                 Done
-              </Button>
-              <Button variant="secondary" size="sm" title="Show it again later" className="pointer-coarse:h-11 pointer-coarse:px-4" onClick={() => act("keep", item)}>
-                Keep
-              </Button>
+              </Btn>
+              <Btn size="sm" onClick={() => act("keep", item)}>
+                Show again later
+              </Btn>
             </div>
           </div>
         </div>
       ) : (
         // Everything on hand was answered; the next few are on their way from the server.
-        <p className="py-1 font-serif text-muted-foreground italic">One moment…</p>
+        <p role="status" className="py-1 text-sm text-muted-foreground">
+          Loading…
+        </p>
       )}
     </section>
   );
@@ -104,23 +95,18 @@ function Card({ item }: { item: Item }) {
     <article>
       {item.kind === "mark" ? (
         <>
-          <blockquote className="line-clamp-[8] border-l-2 border-clay/60 pl-4 font-serif text-lg leading-relaxed">{item.quote}</blockquote>
+          <Quote text={item.quote} className="line-clamp-8" />
           {item.note && <p className="mt-3 line-clamp-4 text-sm leading-relaxed text-muted-foreground">{item.note}</p>}
         </>
       ) : (
         <>
-          <p className="font-serif text-lg leading-snug">{item.title}</p>
+          <p className="text-base leading-snug font-medium">{item.title}</p>
           <p className="mt-1.5 line-clamp-5 text-sm leading-relaxed text-muted-foreground">{item.summary}</p>
         </>
       )}
-      <p className="mt-3 truncate text-[11px] text-muted-foreground">
-        <span className="tracking-wide uppercase">{item.kind === "mark" ? "Highlight" : "Looked up"}</span>
-        {item.bookTitle && (
-          <>
-            <span className="mx-1.5 opacity-50">·</span>
-            <span className="font-serif text-xs italic">{item.bookTitle}</span>
-          </>
-        )}
+      <p className="mt-3 truncate text-xs font-medium text-muted-foreground">
+        {item.kind === "mark" ? "Highlight" : "Term"}
+        {item.bookTitle && ` · ${item.bookTitle}`}
       </p>
     </article>
   );

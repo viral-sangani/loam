@@ -1,5 +1,5 @@
-import { Shelf } from "@/components/shelf/shelf";
+import { Home as Library } from "@/components/library/library";
 
 export default function Home() {
-  return <Shelf />;
+  return <Library />;
 }

@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { ownBook } from "./books";
 import { DAY } from "./text";
-import { chatJSON } from "./llm";
+import { STYLE, chatJSON } from "./llm";
 
 const UA = "Loam/0.1 (personal reading app)";
 
@@ -91,11 +91,11 @@ Reply with JSON only:
 {"title":"<the term's proper name>",
  "wiki":"<exact title of the English Wikipedia article about it, or empty string if none>",
  "summary":"<2 plain-language sentences on what it is>",
- "points":["<3 to 5 one-line facts, each under 15 words>"],
- "context":"<1 or 2 sentences on what it means in this passage and why it matters here>",
- "video":"<a YouTube search query for a short explainer video about it>"}`;
+ "context":"<1 sentence on what it refers to in this passage. Don't comment on its significance.>",
+ "video":"<a YouTube search query for a short explainer video about it>"}
+For the text fields: ${STYLE}`;
 
-type Model = { title?: string; wiki?: string; summary?: string; points?: string[]; context?: string; video?: string };
+type Model = { title?: string; wiki?: string; summary?: string; context?: string; video?: string };
 type Wiki = { title: string; description?: string; extract?: string; image?: string; url: string };
 
 async function wikiSummary(title: string): Promise<Wiki | null> {
@@ -166,7 +166,7 @@ export const build = internalAction({
           title: m.title || wiki?.title || c.term,
           description: wiki?.description,
           summary: wiki?.extract ? brief(wiki.extract) : (m.summary ?? ""),
-          points: (m.points ?? []).filter((p) => typeof p === "string").slice(0, 5),
+          points: [],
           context: m.context ?? "",
           image: wiki?.image,
           wikiUrl: wiki?.url,
@@ -175,7 +175,8 @@ export const build = internalAction({
         },
       });
     } catch (e) {
-      await ctx.runMutation(internal.briefs.store, { briefId, error: e instanceof Error ? e.message : String(e) });
+      console.error(e);
+      await ctx.runMutation(internal.briefs.store, { briefId, error: "Couldn't build the briefing." });
     }
   },
 });

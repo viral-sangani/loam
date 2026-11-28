@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowUpRight, Check, ChevronDown, Copy, Download, Highlighter, MessageCircleQuestionMark, MousePointerClick } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, Copy, Download } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { Pos } from "@/lib/anchors";
@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { Answer, answerGist } from "./answer";
 import { Btn, Chip, IconBtn, field } from "./kit";
 import { DeleteButton, useJump } from "./panel-bits";
-import { Empty, Failed, IconLine, Loading, Quote, SectionLabel, Sheet, SheetBody, SheetFooter } from "./sheet";
+import { Empty, Failed, Loading, Quote, SectionLabel, Sheet, SheetBody, SheetFooter } from "./sheet";
 import { SWATCH, markColor } from "./use-marks";
 
 type Filter = "all" | NotebookEntry["kind"];
@@ -31,6 +31,7 @@ const FILTERS: [Filter, string][] = [
   ["ask", "Questions"],
   ["term", "Terms"],
 ];
+const NONE_YET: Record<Exclude<Filter, "all">, string> = { mark: "No highlights yet.", ask: "No questions yet.", term: "No terms yet." };
 
 /** A highlight's colour, for the thin rule beside its quote. */
 const swatch = (c: string | null) => SWATCH[markColor(c)];
@@ -63,7 +64,7 @@ export function NotebookPanel({
   return (
     <Sheet title="Notebook" variant="side" onClose={onClose}>
       {data && entries.length > 0 && (
-        <div className="flex shrink-0 gap-1.5 overflow-x-auto px-5 pb-3 pointer-coarse:gap-2" role="group" aria-label="Show">
+        <div className="flex shrink-0 gap-1.5 overflow-x-auto px-5 pb-4 pointer-coarse:gap-2" role="group" aria-label="Show">
           {FILTERS.map(([f, label]) => (
             <Chip key={f} pressed={filter === f} count={f === "all" ? undefined : counts[f]} onClick={() => setFilter(f)}>
               {label}
@@ -74,8 +75,12 @@ export function NotebookPanel({
 
       <SheetBody className="pt-0">
         {!data && <Loading className="pt-1" />}
-        {data && entries.length === 0 && <EmptyNotebook />}
-        {data && entries.length > 0 && shown.length === 0 && <p className="pt-2 text-sm text-muted-foreground">Nothing of this kind yet.</p>}
+        {data && entries.length === 0 && (
+          <Empty title="Nothing here yet">Highlights, notes, questions and terms you look up in this book appear here.</Empty>
+        )}
+        {data && filter !== "all" && entries.length > 0 && shown.length === 0 && (
+          <p className="pt-2 text-sm text-muted-foreground">{NONE_YET[filter]}</p>
+        )}
         {shown.map((e, i) => {
           const chapter = chapterLabel(toc, e.pos.section);
           const newChapter = i === 0 || chapterLabel(toc, shown[i - 1].pos.section) !== chapter;
@@ -96,19 +101,6 @@ export function NotebookPanel({
 
       {data && entries.length > 0 && <ExportBar markdown={() => notebookMarkdown(data, toc)} fileName={notebookFileName(data.title)} />}
     </Sheet>
-  );
-}
-
-function EmptyNotebook() {
-  return (
-    <Empty title="Nothing here yet">
-      <ul className="space-y-3">
-        <IconLine icon={Highlighter}>Select text to highlight it, add a note or ask about it.</IconLine>
-        <IconLine icon={MousePointerClick}>Tap an underlined word to look it up.</IconLine>
-        <IconLine icon={MessageCircleQuestionMark}>Ask about the book from the question button at the top.</IconLine>
-      </ul>
-      <p className="mt-4">Everything you add is listed here in reading order, and can be exported as Markdown.</p>
-    </Empty>
   );
 }
 
@@ -206,7 +198,7 @@ function AskEntry({ ask, pos, onJump }: { ask: NotebookAsk; pos: Pos; onJump: (p
   const go = () => onJump(pos);
   return (
     <>
-      <EntryHead kind={ask.kind === "book" ? "Book question" : "Question"} onGo={go}>
+      <EntryHead kind="Question" onGo={go}>
         <DeleteButton label="Delete question" onDelete={() => void remove({ askId: ask._id })} />
       </EntryHead>
       {ask.quote && (
@@ -216,7 +208,7 @@ function AskEntry({ ask, pos, onJump }: { ask: NotebookAsk; pos: Pos; onJump: (p
       )}
       <p className="text-base leading-snug font-medium">{ask.question}</p>
       <div className="mt-2">
-        {ask.status === "pending" && <Loading label="Answering…" lines={2} />}
+        {ask.status === "pending" && <Loading label="Answering…" />}
         {ask.status === "error" && <Failed message="Couldn't get an answer." onRetry={() => void retry({ askId: ask._id })} />}
         {ask.status === "ready" && ask.answer && (
           <>

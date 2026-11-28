@@ -102,4 +102,4 @@ export function notebookMarkdown(data: NotebookData, toc?: readonly TocItem[]): 
 
 /** A safe file name for the exported notebook. */
 export const notebookFileName = (title: string) =>
-  `${title.replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim().slice(0, 120) || "Notebook"} – notes.md`;
+  `${title.replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim().slice(0, 120) || "Notebook"} notes.md`;

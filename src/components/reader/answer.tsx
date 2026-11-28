@@ -7,8 +7,8 @@ import { Bullet } from "./sheet";
 
 /**
  * A small Markdown subset for AI answers: paragraphs, "- " lists, **bold**, *italic*, `code`,
- * paragraph citations ([¶12.4]) as chips that jump to the passage, and the ==key answer==,
- * which the model marks once so a skimmer can stop there. Re-parsing on each render is cheap.
+ * paragraph citations ([¶12.4]) as superscript links to the passage, and the ==key answer==,
+ * which the model marks once in longer answers. Re-parsing on each render is cheap.
  */
 export function Answer({ text, onCite, className }: { text: string; onCite?: (pos: Pos) => void; className?: string }) {
   // Paragraphs are split on blank lines; within one, a run of "- " lines is a list and the rest
@@ -85,8 +85,8 @@ function inline(s: string, onCite?: (pos: Pos) => void): ReactNode[] {
           type="button"
           onClick={() => onCite?.(pos)}
           disabled={!onCite}
-          title="Go to this passage"
-          className="mx-0.5 inline-flex h-5 -translate-y-px cursor-pointer items-center rounded-full border border-border px-1.5 align-middle text-xs leading-none font-medium text-muted-foreground tabular-nums transition-colors duration-150 outline-none hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none"
+          title="Go to passage"
+          className="ml-px cursor-pointer align-super text-[0.7em] leading-none text-muted-foreground tabular-nums underline-offset-2 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none"
         >
           ¶{cite[2]}
           {cite[3] ? `–${cite[3]}` : ""}

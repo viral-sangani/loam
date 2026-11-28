@@ -5,24 +5,27 @@ import { READER_THEMES, type ReaderPrefs } from "@/lib/library";
 import { cn } from "@/lib/utils";
 import { FONT_STEPS, LINE_STEPS, THEME_NAMES, step } from "./config";
 import { IconBtn, Segmented } from "./kit";
-import { Sheet } from "./sheet";
+import { Sheet, SheetBody } from "./sheet";
 
 const THEMES = READER_THEMES.map((t) => [t, THEME_NAMES[t]] as const);
 
 export function SettingsPanel({
   prefs,
   onChange,
+  onShortcuts,
   onClose,
 }: {
   prefs: ReaderPrefs;
   onChange: (patch: Partial<ReaderPrefs>) => void;
+  /** Opens the keyboard shortcuts; without it, the row is hidden. */
+  onShortcuts?: () => void;
   onClose: () => void;
 }) {
   const fontAt = FONT_STEPS.indexOf(prefs.fontSize);
   const lineAt = LINE_STEPS.indexOf(prefs.lineHeight);
   return (
     <Sheet title="Text and theme" variant="popover" onClose={onClose}>
-      <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain px-5 pt-1 pb-6 sm:p-5 short:p-5">
+      <SheetBody className="space-y-4 sm:pt-5 short:pt-5">
         <Segmented label="Theme" options={THEMES} value={prefs.theme} onChange={(theme) => onChange({ theme })} />
         <div className="space-y-1">
           <Row label="Text size">
@@ -62,8 +65,18 @@ export function SettingsPanel({
               </span>
             </button>
           </Row>
+          {onShortcuts && (
+            <button
+              type="button"
+              onClick={onShortcuts}
+              className="-mx-2 flex min-h-11 w-[calc(100%+1rem)] cursor-pointer items-center justify-between gap-4 rounded-lg px-2 text-left text-sm transition-colors duration-150 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60 pointer-coarse:hidden"
+            >
+              Keyboard shortcuts
+              <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-border px-1.5 font-mono text-xs text-muted-foreground">?</kbd>
+            </button>
+          )}
         </div>
-      </div>
+      </SheetBody>
     </Sheet>
   );
 }

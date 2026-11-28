@@ -1,5 +1,8 @@
 /** Minimal client for the OpenAI-compatible model gateway. Runs inside Convex actions. */
 
+/** How every answer, recap and briefing is written. Goes at the end of each system prompt. */
+export const STYLE = `Start with the answer. Don't restate the question, don't open with praise or filler, and don't close with a summary or an offer. No em dashes: use commas, periods or parentheses. No headings. Don't hedge unless the text is genuinely unclear.`;
+
 const BASE_URL = process.env.LLM_BASE_URL ?? "https://models.dehold.co/v1";
 const MODEL = process.env.LLM_MODEL ?? "gpt-6-luna";
 

@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Trash2 } from "lucide-react";
 import type { Id } from "@convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
-import { Btn, IconBtn, field } from "./kit";
+import { Btn, field } from "./kit";
 import { keepKeys } from "./lens";
+import { DeleteButton } from "./panel-bits";
 import { MARK_COLORS, SWATCH, markColor, type Mark, type MarkColor } from "./use-marks";
-import { Sheet } from "./sheet";
+import { Sheet, SheetBody } from "./sheet";
 
 /** A tapped highlight: its words, a note (saved when you leave the field), its colour, and a way to ask about it. */
 export function MarkPanel({
@@ -46,7 +46,7 @@ export function MarkPanel({
 
   return (
     <Sheet title="Highlight" variant="popover" onClose={onClose}>
-      <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain px-5 pt-1 pb-6 sm:p-5 short:p-5">
+      <SheetBody className="space-y-4 sm:pt-5 short:pt-5">
         <blockquote className="line-clamp-6 font-book text-base leading-relaxed">
           <span className="box-decoration-clone px-0.5" style={{ background: `color-mix(in oklch, ${SWATCH[color]} 40%, transparent)` }}>
             {mark.quote}
@@ -83,22 +83,21 @@ export function MarkPanel({
               </button>
             ))}
           </div>
-          <IconBtn
-            label="Delete highlight"
-            className="-mr-1.5 hover:text-destructive"
-            onClick={() => {
-              latest.current.saved = note; // nothing left to save
-              onRemove(mark._id);
-              onClose();
-            }}
-          >
-            <Trash2 />
-          </IconBtn>
+          <div className="-mr-1.5">
+            <DeleteButton
+              label="Delete highlight"
+              onDelete={() => {
+                latest.current.saved = note; // nothing left to save
+                onRemove(mark._id);
+                onClose();
+              }}
+            />
+          </div>
         </div>
         <Btn className="w-full" onClick={onExplain}>
           Explain this passage
         </Btn>
-      </div>
+      </SheetBody>
     </Sheet>
   );
 }

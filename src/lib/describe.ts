@@ -8,9 +8,9 @@ import { loadBookFile } from "./library";
 import { plainText } from "./upload";
 
 /**
- * Books shelved before descriptions were stored get theirs filled in from the EPUB, quietly:
- * one book at a time, in idle time, at most once per book per session (a book with no blurb,
- * or one that fails, isn't retried until the next visit).
+ * Books added before descriptions were stored get theirs filled in from the EPUB: one book at a
+ * time, in idle time. A book with no blurb is saved as "" so it is read once, ever; one that fails
+ * isn't retried until the next visit.
  */
 
 /** Books already tried this session, whatever came of it. */
@@ -32,12 +32,10 @@ export async function readDescription(file: ArrayBuffer): Promise<string> {
   }
 }
 
-async function backfill(convex: ConvexReactClient, bookId: Id<"books">) {
-  // books.list doesn't carry the file; books.get does.
-  const book = await convex.query(api.books.get, { bookId });
-  if (!book?.epubUrl || book.description) return;
+async function backfill(convex: ConvexReactClient, book: Shelved) {
+  if (!book.epubUrl) return;
   const description = await readDescription(await loadBookFile(book.epub, book.epubUrl));
-  if (description) await convex.mutation(api.books.setDescription, { bookId, description });
+  await convex.mutation(api.books.setDescription, { bookId: book._id, description });
 }
 
 function whenIdle(fn: () => void): () => void {
@@ -49,7 +47,7 @@ function whenIdle(fn: () => void): () => void {
   return () => clearTimeout(t);
 }
 
-type Shelved = { _id: Id<"books">; description: string | null };
+type Shelved = { _id: Id<"books">; description: string | null; epub: string; epubUrl: string | null };
 
 export function useDescriptionBackfill(books: Shelved[] | undefined) {
   const convex = useConvex();
@@ -71,7 +69,7 @@ export function useDescriptionBackfill(books: Shelved[] | undefined) {
       cancel = whenIdle(() => {
         if (stopped || running) return next();
         tried.add(book._id);
-        running = backfill(convex, book._id)
+        running = backfill(convex, book)
           .catch((e) => console.warn("Couldn't read the description of", book._id, e))
           .finally(() => {
             running = null;
