@@ -300,7 +300,7 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
         )}
         {inHand && held && (
           <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-2">
-            {confirming ? (
+            {owner && confirming ? (
               <>
                 <span className="px-2 text-base">Remove this book and its notes?</span>
                 <Pill
@@ -372,7 +372,7 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
       </div>
 
       {/* today's review, on the side table */}
-      {reviewOpen && (
+      {owner && reviewOpen && (
         <aside
           data-review
           role="dialog"

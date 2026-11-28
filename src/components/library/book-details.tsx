@@ -51,7 +51,7 @@ export function BookDetails({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {confirm ? (
+        {owner && confirm ? (
           <>
             <span className="text-sm">Remove this book and its notes?</span>
             <Btn size="sm" className="text-destructive" onClick={() => void onRemove()}>
