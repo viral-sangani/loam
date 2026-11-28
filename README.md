@@ -8,9 +8,9 @@ passage, and a video or Wikipedia link when there is one.
 
 ## How it works
 
-- **Next.js app** (`src/`): sign-in, the library (a 3D reading room built with three.js, or a plain list on phones and by choice), and the reader (epub.js).
+- **Next.js app** (`src/`): owner sign-in, the public library (a 3D reading room built with three.js, or a plain list on phones and by choice), and the reader (epub.js).
   Highlights are painted with the CSS Custom Highlight API, so the book's markup never changes.
-- **Convex** (`convex/`): accounts (username + password via Convex Auth), books, files, reading
+- **Convex** (`convex/`): the owner account (username + password via Convex Auth), books, files, reading
   progress, word timings, terms and briefings. Syncs across devices.
 - **Term finding** (`convex/terms.ts`): after upload, a background job sends the text, chapter by
   chapter, to a cheap model (GPT-6 Luna by default) to pick terms worth explaining.
@@ -61,6 +61,32 @@ Live at https://books.viralsangani.me. Vercel builds every push to `master` on t
 the production deployment and builds the app against it. Vercel needs `CONVEX_DEPLOY_KEY` (a prod
 deploy key). The aligner still runs on your machine; set `ALIGNER_CONVEX_URL` in `.env.local` to the
 prod Convex URL so it serves the live site.
+
+## Sharing
+
+Sign in at `/admin`. Add an EPUB and optionally attach its audiobook. In the room, select the
+book and choose **More actions → Share with readers**. In List view, open the book’s details for
+the same control. Anyone with the library or reader link can read and play the audio for shared
+books. Readers save their place on their device. The owner account has synced progress, notes,
+audiobook text sync and the reading companion.
+
+Books start private. **Make private** removes the book from the public library and disables its
+reader link after the CDN cache expires (up to 60 seconds).
+
+### Configuration and usage limits
+
+- Set `LOAM_OWNER_ID` on Convex to the existing owner's document ID in `users`. For a new
+  deployment, run the internal `auth:createOwner` mutation from the Convex console and set the
+  variable to the returned ID. The public app has no signup flow.
+- Generate a random `LOAM_PUBLIC_KEY` and set the same value on Convex and in the Vercel production
+  environment. For local development, also put it in `.env.local`. Keep it server-side.
+- The anonymous API reserves up to 90 origin requests per minute, 700 per UTC day and 6,000 per UTC
+  month. Public file transfer from Convex is capped at 512 MiB per UTC day and 768 MiB per UTC month.
+  Responses that exceed a limit return HTTP 429. Guest reads use short CDN caching, and audio
+  streams through the same gateway with byte-range support.
+- A Vercel Firewall rule for `/api/library/` can enforce an additional per-IP limit. The
+  application quotas cover successful origin work. Hosting requests and other provider usage
+  still count toward the account’s plan limits.
 
 ## Reader shortcuts
 

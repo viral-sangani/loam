@@ -15,6 +15,7 @@ import type * as briefs from "../briefs.js";
 import type * as llm from "../llm.js";
 import type * as marks from "../marks.js";
 import type * as notebook from "../notebook.js";
+import type * as publicLibrary from "../publicLibrary.js";
 import type * as recaps from "../recaps.js";
 import type * as review from "../review.js";
 import type * as terms from "../terms.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   llm: typeof llm;
   marks: typeof marks;
   notebook: typeof notebook;
+  publicLibrary: typeof publicLibrary;
   recaps: typeof recaps;
   review: typeof review;
   terms: typeof terms;

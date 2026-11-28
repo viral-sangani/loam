@@ -2,7 +2,7 @@ import type { FunctionReturnType } from "convex/server";
 import type { api } from "@convex/_generated/api";
 
 /** A book as `books.list` returns it. */
-export type ListedBook = FunctionReturnType<typeof api.books.list>[number];
+export type ListedBook = Omit<FunctionReturnType<typeof api.books.list>[number], "epub"> & { epub: string };
 /** Counts from `books.extras`. */
 export type Extras = FunctionReturnType<typeof api.books.extras>;
 

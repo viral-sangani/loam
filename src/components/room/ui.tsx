@@ -44,7 +44,7 @@ export function Pill({ tone = "default", icon, round, size = "md", className, ch
         )}
       >
         {icon}
-        {children}
+        {children != null && <span className="pill-label">{children}</span>}
       </span>
     </button>
   );
@@ -72,7 +72,7 @@ export function ViewToggle({ view, onChange }: { view: "room" | "list"; onChange
             )}
           >
             {icon}
-            <span className="max-sm:sr-only short:sr-only">{label}</span>
+            <span className="pill-label max-sm:sr-only short:sr-only">{label}</span>
           </button>
         ))}
       </span>
@@ -133,7 +133,7 @@ export function bookFacts(b: ShelfBook): Fact[] {
   const a = b.audio;
   const audio: Fact =
     a.kind === "ready"
-      ? { key: "audio", label: "Audiobook", value: ["Synced", duration(a.durationMs)].filter(Boolean).join(" · "), sub: a.coverage !== null ? `${pct(a.coverage)} of the text follows the audio` : undefined, bar: a.coverage !== null ? a.coverage * 100 : undefined, tone: "#d6b06a", strong: true }
+      ? { key: "audio", label: "Audiobook", value: [b.guest ? "Available" : "Synced", duration(a.durationMs)].filter(Boolean).join(" · "), sub: a.coverage !== null ? `${pct(a.coverage)} of the text follows the audio` : undefined, bar: a.coverage !== null ? a.coverage * 100 : undefined, tone: "#d6b06a", strong: true }
       : a.kind === "syncing"
         ? { key: "audio", label: "Audiobook", value: `Syncing · ${a.pct}%`, bar: a.pct, tone: "#d6b06a" }
         : a.kind === "queued"

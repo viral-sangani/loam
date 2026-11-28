@@ -477,6 +477,7 @@ export function drawBack(b: ShelfBook, cover: CoverImage | null) {
 }
 
 function stamp(g: G, b: ShelfBook) {
+  if (b.guest) return;
   const ai = b.ai;
   g.save();
   if (ai.kind === "done") {
@@ -587,7 +588,9 @@ export function drawCard(b: ShelfBook) {
             : a.kind === "error"
               ? "sync failed"
               : "—";
-  const rows: [string, string][] = [
+  const rows: [string, string][] = b.guest
+    ? [["Audiobook", a.kind === "ready" ? duration(a.durationMs) ?? "Available" : "None"]]
+    : [
     ["Reading", progressLabel(b)],
     ["Highlights", n(x?.highlights)],
     ["Notes", n(x?.notes)],
@@ -764,6 +767,7 @@ function paperBase(g: G, ph: number, side: "left" | "right") {
 
 /** Lines for the last page: where you are, the audio, and Loam's pass. */
 export function endNotes(b: ShelfBook) {
+  if (b.guest) return b.audio.kind === "ready" ? ["An audiobook is available."] : [];
   const items: string[] = [];
   items.push(finished(b) ? "You finished this one." : b.started ? `Your place: ${progressLabel(b)}.` : "You haven't started it yet.");
   const a = b.audio;

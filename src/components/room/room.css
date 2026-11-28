@@ -116,3 +116,10 @@
     animation-duration: 1ms !important;
   }
 }
+
+/* Center the cap height of Literata against the icons and compensate for trailing tracking. */
+.loam-lib .pill-label {
+  line-height: 1;
+  padding-inline-start: 0.14em;
+  translate: 0 -0.09em;
+}

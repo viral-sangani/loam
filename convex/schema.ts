@@ -44,7 +44,19 @@ export default defineSchema({
     bookId: v.optional(v.id("books")),
   }).index("by_storage", ["storageId"]),
 
+  publicUsage: defineTable({
+    month: v.string(),
+    day: v.number(),
+    minute: v.number(),
+    monthRequests: v.number(),
+    dayRequests: v.number(),
+    minuteRequests: v.number(),
+    monthBytes: v.number(),
+    dayBytes: v.number(),
+  }),
+
   books: defineTable({
+    shared: v.optional(v.boolean()),
     userId: v.id("users"),
     title: v.string(),
     author: v.string(),
@@ -76,7 +88,7 @@ export default defineSchema({
         positionMs: v.optional(v.number()),
       }),
     ),
-  }).index("by_user", ["userId"]),
+  }).index("by_user", ["userId"]).index("by_user_shared", ["userId", "shared"]),
 
   /** The book's text, split the same way the reader splits it: paragraphs of words. */
   sections: defineTable({

@@ -126,7 +126,7 @@ type BK = {
 };
 
 function signature(b: ShelfBook, cover: CoverImage | null, T: number) {
-  return JSON.stringify([b.title, b.author, b.description, b.percent, b.started, b.chapter, b.audio, b.ai, b.extras, b.addedAt, !!cover, T]);
+  return JSON.stringify([b.guest, b.title, b.author, b.description, b.percent, b.started, b.chapter, b.audio, b.ai, b.extras, b.addedAt, !!cover, T]);
 }
 
 export function createRoom(canvas: HTMLCanvasElement, opts: RoomOptions): RoomController | null {
@@ -554,11 +554,12 @@ export function createRoom(canvas: HTMLCanvasElement, opts: RoomOptions): RoomCo
     const rightM = mat(std({ color: "#ffffff", roughness: 0.9 }));
     const leftP = new THREE.Mesh(pageG, leftM);
     leftP.rotation.y = Math.PI;
-    leftP.position.set(W / 2 + 0.002, 0, -(cb / 2 + 0.0006));
+    // At full open both sheets meet at the hinge, just above the spine and page block.
+    leftP.position.set(pw / 2, 0, -(cb / 2 + 0.0006));
     pivot.add(leftP);
     leftP.visible = false;
     const rightP = new THREE.Mesh(pageG, rightM);
-    rightP.position.set(-0.002, 0, Tt / 2 - cb + 0.0005);
+    rightP.position.set((pw - W) / 2, 0, Tt / 2 + 0.0006);
     grp.add(rightP);
     rightP.visible = false;
     const leaf = new THREE.Group();
@@ -568,11 +569,11 @@ export function createRoom(canvas: HTMLCanvasElement, opts: RoomOptions): RoomCo
     const leafFM = mat(std({ color: "#ffffff", roughness: 0.9 }));
     const leafBM = mat(std({ color: "#ffffff", roughness: 0.9 }));
     const lf1 = new THREE.Mesh(pageG, leafFM);
-    lf1.position.x = pw / 2 + 0.004;
+    lf1.position.x = pw / 2;
     leaf.add(lf1);
     const lf2 = new THREE.Mesh(pageG, leafBM);
     lf2.rotation.y = Math.PI;
-    lf2.position.set(pw / 2 + 0.004, 0, -0.0002);
+    lf2.position.set(pw / 2, 0, -0.0002);
     leaf.add(lf2);
     // the reading card in its pocket on the back cover
     const card = new THREE.Mesh(geo(new THREE.PlaneGeometry(0.105, 0.13)), mat(std({ map: tex(drawCard(b)), roughness: 0.85 })));

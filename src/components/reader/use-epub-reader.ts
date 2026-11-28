@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery } from "convex/react";
 import type { Book as EpubBook, Contents, EpubCFI, Location, Rendition } from "epubjs";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { Pos } from "@/lib/anchors";
+import { libraryPath, publicEpubKey, type PublicDetails } from "@/lib/public-library";
 import { paragraphElements, wordRange } from "@/lib/book-text";
 import {
   getLocations,
@@ -183,8 +184,27 @@ export function useEpubReader(
   events: RefObject<FrameEvents>,
   start: Pos | null = null,
   handoff: Handoff | null = null,
+  shared?: PublicDetails["book"] | null,
 ) {
-  const book = useQuery(api.books.get, { bookId: id });
+  const owner = shared === undefined;
+  const privateBook = useQuery(api.books.get, owner ? { bookId: id } : "skip");
+  const [progress] = useState(() => {
+    if (owner) return null;
+    try {
+      return JSON.parse(localStorage.getItem(`loam:public-progress:${id}`) ?? "null") as Progress | null;
+    } catch {
+      return null;
+    }
+  });
+  const publicBook = useMemo(() => shared && {
+    ...shared,
+    epub: publicEpubKey(id),
+    epubUrl: libraryPath(id, "epub"),
+    progress,
+    openedAt: null,
+    audio: null,
+  }, [id, progress, shared]);
+  const book = owner ? privateBook : publicBook;
   const saveProgressMutation = useMutation(api.books.saveProgress);
   const bookRef = useRef<EpubBook | null>(null);
   const rendRef = useRef<Rendition | null>(null);
@@ -220,8 +240,17 @@ export function useEpubReader(
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const flush = useCallback(() => {
     clearTimeout(saveTimer.current);
-    if (lastProgress.current) void saveProgressMutation({ bookId: id, progress: lastProgress.current }).catch(() => {});
-  }, [id, saveProgressMutation]);
+    if (!lastProgress.current) return;
+    if (owner) {
+      void saveProgressMutation({ bookId: id, progress: lastProgress.current }).catch(() => {});
+    } else {
+      try {
+        localStorage.setItem(`loam:public-progress:${id}`, JSON.stringify(lastProgress.current));
+      } catch {
+        /* device storage is best effort */
+      }
+    }
+  }, [id, owner, saveProgressMutation]);
   const saveSoon = useCallback(() => {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(flush, 1500);

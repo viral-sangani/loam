@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
@@ -8,7 +8,6 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { ChevronDown, Headphones, LogOut, Plus } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { SignIn } from "@/components/auth/sign-in";
 import { Btn, IconBtn, Segmented } from "@/components/reader/kit";
 import { RoomLoader, SCENE } from "@/components/room/loader";
 import { useLibraryView, type LibraryView } from "@/components/room/view-mode";
@@ -19,6 +18,8 @@ import { loadPrefs, type ReaderTheme } from "@/lib/library";
 import { handOff, warmBook } from "@/lib/open-book";
 import { addAudiobook, addEpub } from "@/lib/upload";
 import { cn } from "@/lib/utils";
+import { libraryPath, publicEpubKey, type PublicBook } from "@/lib/public-library";
+import { usePublicLibrary } from "./use-public-library";
 import { BookDetails } from "./book-details";
 import { clearCachedBooks, readCachedBooks, saveCachedBooks } from "./cache";
 import { audioLabel, audioState, progressLabel, readHref, termsLabel, type ListedBook } from "./model";
@@ -45,40 +46,65 @@ const RoomView = dynamic(loadRoom, { ssr: false, loading: () => <RoomLoader /> }
 export function Home() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { view, setView, canRoom } = useLibraryView();
-  // The last list seen on this device, shown while sign-in is confirmed.
+  const owner = useQuery(api.auth.isAuthenticated, isAuthenticated ? {} : "skip");
+  const checking = isLoading || (isAuthenticated && owner === undefined);
   const cached = useSyncExternalStore(noop, readCachedBooks, () => null);
+  const catalog = usePublicLibrary<PublicBook[]>(checking || owner ? null : "/api/library/catalog");
+  const publicBooks = useMemo(() => catalog?.data?.map((book): ListedBook => ({
+    ...book,
+    shared: true,
+    epub: publicEpubKey(book._id),
+    epubUrl: libraryPath(book._id, "epub"),
+    coverUrl: book.hasCover ? libraryPath(book._id, "cover") : null,
+    openedAt: null,
+    progress: null,
+    terms: { status: "done", done: 0, total: 0 },
+    audio: book.audioFiles ? { status: "ready", durationMs: book.durationMs, coverage: null, progress: 1, stage: undefined, error: undefined } : null,
+  })) ?? (catalog ? [] : undefined), [catalog]);
   const roomFirst = view === "room" && canRoom;
   useEffect(() => {
     if (roomFirst) void loadRoom();
   }, [roomFirst]);
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) clearCachedBooks();
-  }, [isLoading, isAuthenticated]);
-  if (isAuthenticated) return <Library cached={cached} live view={view} setView={setView} canRoom={canRoom} />;
-  if (isLoading) {
-    if (cached) return <Library cached={cached} live={false} view={view} setView={setView} canRoom={canRoom} />;
-    return roomFirst ? <RoomLoader /> : null;
-  }
-  return <SignIn />;
+    if (!checking && !owner) clearCachedBooks();
+  }, [checking, owner]);
+  if (checking && !cached) return roomFirst ? <RoomLoader /> : null;
+  return <Library
+    cached={owner || checking ? cached : null}
+    owner={owner === true}
+    publicBooks={checking || owner ? undefined : publicBooks}
+    publicError={catalog?.error ?? null}
+    checking={checking}
+    view={view}
+    setView={setView}
+    canRoom={canRoom}
+  />;
 }
 
 function Library({
   cached,
-  live,
+  owner,
+  publicBooks,
+  publicError,
+  checking,
   view,
   setView,
   canRoom,
 }: {
   cached: ListedBook[] | null;
-  live: boolean;
+  owner: boolean;
+  publicBooks: ListedBook[] | undefined;
+  publicError: string | null;
+  checking: boolean;
   view: LibraryView;
   setView: (v: LibraryView) => void;
   canRoom: boolean;
 }) {
   const convex = useConvex();
-  const fresh = useQuery(api.books.list, live ? {} : "skip");
-  const books = fresh ?? cached ?? undefined;
+  const fresh = useQuery(api.books.list, owner ? {} : "skip");
+  const books = fresh ?? cached ?? publicBooks;
   useDescriptionBackfill(fresh);
+  const shareBook = useMutation(api.publicLibrary.setShared);
   const removeBook = useMutation(api.books.remove);
   const { signOut } = useAuthActions();
   const theme = useTheme();
@@ -101,7 +127,7 @@ function Library({
   // The most recent book is the likeliest next open: have its file and the reader ready.
   const first = books?.[0];
   useEffect(() => {
-    if (!first) return;
+    if (!owner || !first) return;
     const run = () => warmBook(first.epub, first.epubUrl);
     if (typeof requestIdleCallback === "function") {
       const h = requestIdleCallback(run, { timeout: 3000 });
@@ -109,7 +135,7 @@ function Library({
     }
     const t = setTimeout(run, 1000);
     return () => clearTimeout(t);
-  }, [first]);
+  }, [first, owner]);
 
   useEffect(() => {
     const meta = document.createElement("meta");
@@ -161,6 +187,7 @@ function Library({
   );
 
   useEffect(() => {
+    if (!owner) return;
     let depth = 0;
     const enter = (e: DragEvent) => {
       if (!e.dataTransfer?.types.includes("Files")) return;
@@ -188,7 +215,7 @@ function Library({
       window.removeEventListener("dragover", over);
       window.removeEventListener("drop", drop);
     };
-  }, [add]);
+  }, [add, owner]);
 
   const empty = books !== undefined && books.length === 0;
   const addBooks = () => inputRef.current?.click();
@@ -203,6 +230,14 @@ function Library({
     } catch (e) {
       console.error(e);
       setError("Couldn't remove that book.");
+    }
+  };
+  const setShared = async (id: string, shared: boolean) => {
+    setError(null);
+    try {
+      await shareBook({ bookId: id as Id<"books">, shared });
+    } catch {
+      setError("Couldn’t change who can read this book.");
     }
   };
   const chooseView = (v: LibraryView) => {
@@ -251,21 +286,24 @@ function Library({
   if (room) {
     return (
       <div className="loam-lib relative z-10 flex min-h-dvh w-full flex-1 flex-col">
-        {files}
+        {owner && files}
         <RoomView
           books={books}
           uploads={uploads}
           busy={busy}
-          error={error}
-          addBooks={live ? addBooks : () => {}}
-          addAudio={live ? addAudio : () => {}}
+          error={error ?? publicError}
+          addBooks={addBooks}
+          addAudio={addAudio}
           remove={remove}
+          owner={owner}
+          checking={checking}
+          setShared={setShared}
           signOut={() => void signOut()}
           view={view}
           setView={chooseView}
           canRoom={canRoom}
           onFallback={setFallback}
-          live={live}
+          live={owner}
         />
       </div>
     );
@@ -273,12 +311,12 @@ function Library({
 
   return (
     <div data-reader-theme={theme} className="relative z-10 flex min-h-dvh w-full flex-1 flex-col bg-background text-foreground animate-in duration-300 fade-in">
-      {files}
+      {owner && files}
       <header className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-2 pl-[max(1.25rem,env(safe-area-inset-left))] sm:pt-8">
         <h1 className="text-lg font-semibold">Loam</h1>
         <div className="flex items-center gap-1">
-          {!empty && (
-            <Btn icon={<Plus aria-hidden />} onClick={addBooks} disabled={busy || !live}>
+          {owner && !empty && (
+            <Btn icon={<Plus aria-hidden />} onClick={addBooks} disabled={busy}>
               {busy ? "Adding…" : "Add book"}
             </Btn>
           )}
@@ -294,16 +332,16 @@ function Library({
               className="w-32"
             />
           )}
-          <IconBtn label="Sign out" onClick={() => void signOut()}>
+          {owner && <IconBtn label="Sign out" onClick={() => void signOut()}>
             <LogOut aria-hidden />
-          </IconBtn>
+          </IconBtn>}
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-3xl flex-1 pt-4 pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(4rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:pt-6">
-        {error && (
+        {(error || publicError) && (
           <p role="alert" className="mb-4 text-sm text-destructive">
-            {error}
+            {error ?? publicError}
           </p>
         )}
 
@@ -312,9 +350,10 @@ function Library({
             {fallback === "webgl" ? "This browser can't draw the 3D room, so the list is shown." : "The 3D room stopped drawing, so the list is shown."}
           </p>
         )}
-        {live && !empty && <ReviewDesk />}
+        {owner && !empty && <ReviewDesk />}
 
-        {empty && (
+        {!checking && !owner && !publicError && empty && <p className="py-12 text-sm text-muted-foreground">No books have been shared yet.</p>}
+        {empty && owner && (
           <button
             type="button"
             onClick={addBooks}
@@ -337,7 +376,8 @@ function Library({
                 book={b}
                 uploading={uploads[b._id] ?? null}
                 open={openId === b._id}
-                live={live}
+                owner={owner}
+                onShare={(shared) => setShared(b._id, shared)}
                 onToggle={() => setOpenId((cur) => (cur === b._id ? null : b._id))}
                 onAddAudio={() => addAudio(b._id)}
                 onRemove={() => remove(b._id)}
@@ -355,7 +395,8 @@ function BookRow({
   book,
   uploading,
   open,
-  live,
+  owner,
+  onShare,
   onToggle,
   onAddAudio,
   onRemove,
@@ -363,16 +404,17 @@ function BookRow({
   book: ListedBook;
   uploading: number | null;
   open: boolean;
-  live: boolean;
+  owner: boolean;
+  onShare: (shared: boolean) => Promise<void>;
   onToggle: () => void;
   onAddAudio: () => void;
   onRemove: () => Promise<void>;
 }) {
   const audio = audioState(book, uploading);
-  const status = [progressLabel(book), audioLabel(audio), termsLabel(book)].filter(Boolean).join(" · ");
+  const status = [owner && progressLabel(book), audioLabel(audio), owner && termsLabel(book)].filter(Boolean).join(" · ");
   const percent = book.progress?.percent ?? null;
   const title = book.title || "Untitled";
-  const warm = () => warmBook(book.epub, book.epubUrl);
+  const warm = () => { if (owner) warmBook(book.epub, book.epubUrl); };
   const hand = () => book.epubUrl && handOff(book._id, { epub: book.epub, epubUrl: book.epubUrl, cfi: book.progress?.cfi ?? "" });
   const detailsId = `book-${book._id}`;
 
@@ -413,7 +455,7 @@ function BookRow({
       </div>
       {open && (
         <div id={detailsId} className="pb-5 sm:pl-[4.5rem]">
-          <BookDetails book={book} audio={audio} live={live} onAddAudio={onAddAudio} onRemove={onRemove} />
+          <BookDetails book={book} audio={audio} owner={owner} onShare={onShare} onAddAudio={onAddAudio} onRemove={onRemove} />
         </div>
       )}
     </li>

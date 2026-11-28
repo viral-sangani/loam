@@ -2,7 +2,8 @@ import type { FunctionReturnType } from "convex/server";
 import type { api } from "@convex/_generated/api";
 
 /** A book as `books.list` returns it. */
-export type ListedBook = FunctionReturnType<typeof api.books.list>[number];
+export type { ListedBook } from "@/components/library/model";
+import type { ListedBook } from "@/components/library/model";
 /** Counts from `books.extras`. */
 export type Extras = FunctionReturnType<typeof api.books.extras>;
 
@@ -25,6 +26,7 @@ export type { PreviewPara } from "@/components/library/model";
 /** Everything the room and the list draw for one book. */
 export type ShelfBook = {
   id: string;
+  guest: boolean;
   /** Where the book file is, and the reading spot: handed to the reader on open. */
   epub: string;
   epubUrl: string | null;
@@ -101,9 +103,10 @@ export function aiState(book: ListedBook, extras: Extras | null): AiState {
   return { kind: "waiting" };
 }
 
-export function toShelfBook(book: ListedBook, uploading: number | null, extras: Extras | null): ShelfBook {
+export function toShelfBook(book: ListedBook, uploading: number | null, extras: Extras | null, guest: boolean): ShelfBook {
   return {
     id: book._id,
+    guest,
     epub: book.epub,
     epubUrl: book.epubUrl,
     cfi: book.progress?.cfi ?? "",
@@ -180,6 +183,7 @@ export function aiLabel(a: AiState) {
 
 /** One line for hover cards and the screen-reader summary. */
 export function statusLine(b: ShelfBook) {
+  if (b.guest) return b.audio.kind === "ready" ? ["Audiobook", duration(b.audio.durationMs)].filter(Boolean).join(" · ") : "";
   const parts = [progressLabel(b)];
   if (b.audio.kind !== "none") parts.push(audioLabel(b.audio));
   parts.push(aiLabel(b.ai));

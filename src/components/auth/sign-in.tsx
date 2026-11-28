@@ -1,56 +1,52 @@
 "use client";
 
-import { useState } from "react";
-import {
-  useSignInWithUsernamePassword,
-  useSignUpWithUsernamePassword,
-} from "@convex-dev/auth/methods/username-password/react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { useConvexAuth, useQuery } from "convex/react";
+import { useSignInWithUsernamePassword } from "@convex-dev/auth/methods/username-password/react";
 import { api } from "@convex/_generated/api";
 import { Btn } from "@/components/reader/kit";
 
 const MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: "That username and password don't match.",
-  USER_NOT_FOUND: "No account with that username. Create one instead?",
-  USERNAME_TAKEN: "That username is taken.",
-  USERNAME_TOO_SHORT: "Pick a longer username.",
-  USERNAME_TOO_LONG: "Pick a shorter username.",
-  USERNAME_HAS_INVALID_CHARACTERS: "Use letters, numbers, dots, dashes or underscores.",
-  USERNAME_HAS_SURROUNDING_WHITESPACE: "Remove the spaces around the username.",
-  PASSWORD_TOO_SHORT: "Use a longer password.",
-  PASSWORD_TOO_LONG: "Use a shorter password.",
-  PASSWORD_TOO_COMMON: "That password is too common. Try another.",
-  PASSWORD_HAS_SURROUNDING_WHITESPACE: "Remove the spaces around the password.",
   RATE_LIMITED: "Too many tries. Wait a moment and try again.",
 };
 
 const input =
   "h-11 w-full rounded-lg border border-input bg-card px-3.5 text-base outline-none transition-colors duration-150 placeholder:text-muted-foreground focus:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/20";
 
+const subscribe = () => () => {};
+
 export function SignIn() {
-  const [mode, setMode] = useState<"in" | "up">("in");
   const [error, setError] = useState<string | null>(null);
-  const { signIn, pending: signingIn } = useSignInWithUsernamePassword(api.auth);
-  const { signUp, pending: signingUp } = useSignUpWithUsernamePassword(api.auth);
-  const pending = signingIn || signingUp;
+  const { signIn, pending } = useSignInWithUsernamePassword(api.auth);
+  const ready = useSyncExternalStore(subscribe, () => true, () => false);
+  const router = useRouter();
+  const { isAuthenticated } = useConvexAuth();
+  const owner = useQuery(api.auth.isAuthenticated, isAuthenticated ? {} : "skip");
+  useEffect(() => {
+    if (owner) router.replace("/");
+  }, [owner, router]);
 
   return (
     // Sideways phones: the welcome on the left and the form on the right, so both fit the short screen.
-    <div className="relative z-10 mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-5 py-16 short:grid short:max-w-3xl short:grid-cols-2 short:content-center short:items-center short:gap-x-12 short:pt-[max(1.5rem,env(safe-area-inset-top))] short:pr-[max(1.5rem,env(safe-area-inset-right))] short:pb-[max(1.5rem,env(safe-area-inset-bottom))] short:pl-[max(1.5rem,env(safe-area-inset-left))]">
+    <div data-reader-theme="paper" className="relative z-10 mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-5 py-16 short:grid short:max-w-3xl short:grid-cols-2 short:content-center short:items-center short:gap-x-12 short:pt-[max(1.5rem,env(safe-area-inset-top))] short:pr-[max(1.5rem,env(safe-area-inset-right))] short:pb-[max(1.5rem,env(safe-area-inset-bottom))] short:pl-[max(1.5rem,env(safe-area-inset-left))]">
       <div>
         <p className="mb-10 font-book text-lg leading-7 font-medium short:mb-6">Loam</p>
-        <h1 className="font-book text-2xl leading-8">{mode === "in" ? "Sign in" : "Create account"}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Your books, audiobooks and notes, synced across devices.</p>
+        <h1 className="font-book text-2xl leading-8">Owner sign-in</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Manage the library and audiobooks.</p>
       </div>
 
       <div className="flex flex-col">
         <form
+          method="post"
           className="mt-8 space-y-3 short:mt-0"
           onSubmit={async (e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
             const credentials = { username: String(form.get("username")), password: String(form.get("password")) };
             setError(null);
-            const result = mode === "in" ? await signIn(credentials) : await signUp(credentials);
+            const result = await signIn(credentials);
             if (result.status === "error") {
               const code = (result.userError as { error?: string }).error ?? "OTHER_ERROR";
               setError(MESSAGES[code] ?? "Something went wrong. Try again.");
@@ -61,7 +57,7 @@ export function SignIn() {
           <input
             name="password"
             type="password"
-            autoComplete={mode === "in" ? "current-password" : "new-password"}
+            autoComplete="current-password"
             placeholder="Password"
             aria-label="Password"
             required
@@ -72,22 +68,10 @@ export function SignIn() {
               {error}
             </p>
           )}
-          <Btn type="submit" tone="primary" disabled={pending} className="h-11 w-full">
-            {pending ? (mode === "in" ? "Signing in…" : "Creating account…") : mode === "in" ? "Sign in" : "Create account"}
+          <Btn type="submit" tone="primary" disabled={!ready || pending} className="h-11 w-full">
+            {pending ? "Signing in…" : "Sign in"}
           </Btn>
         </form>
-
-        <button
-          type="button"
-          onClick={() => {
-            setMode(mode === "in" ? "up" : "in");
-            setError(null);
-          }}
-          className="mt-6 min-h-11 cursor-pointer self-start text-sm short:mt-3 text-muted-foreground transition-colors duration-150 hover:text-foreground"
-        >
-          {mode === "in" ? "No account? " : "Have an account? "}
-          <span className="text-primary underline underline-offset-4">{mode === "in" ? "Create account" : "Sign in"}</span>
-        </button>
       </div>
     </div>
   );

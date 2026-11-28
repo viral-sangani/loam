@@ -26,7 +26,7 @@ function fontsReady() {
 function hintFor(rs: RoomState, book: ShelfBook | null, opts: { empty: boolean; touch: boolean; busy: boolean; due: number }) {
   if (opts.busy) return "Putting the book on the shelf…";
   if (rs.stage === "room" || rs.stage === "shelf") {
-    if (opts.empty) return "The shelf is empty. Add an EPUB to begin.";
+    if (opts.empty) return "";
     if (rs.zone === "review") return `Today's review: ${opts.due} ${opts.due === 1 ? "card" : "cards"}. Click to open it.`;
     if (rs.stage === "room") return opts.touch ? "Tap a spine to take it down." : "Hover a spine to see the book. Click to take it down.";
     return opts.touch ? "Tap a spine to take it down." : "Click a spine to take it down. Arrow keys move along the shelf.";
@@ -43,7 +43,7 @@ function hintFor(rs: RoomState, book: ShelfBook | null, opts: { empty: boolean; 
     case "spine":
       return "Keep turning. The blurb is on the back.";
     case "back":
-      return rs.cardOut ? "Your reading card: progress, marks and Loam's stamp." : `The blurb and audiobook. ${opts.touch ? "Tap" : "Click"} the card to pull it out.`;
+      return rs.cardOut ? "Reading card." : `The blurb and audiobook. ${opts.touch ? "Tap" : "Click"} the card to pull it out.`;
     case "edge": {
       const x = book.extras;
       return x && x.highlights + x.notes + x.lookedUp > 0 ? "Tabs on the fore-edge: amber highlights, sage notes, rose looked-up terms." : "No highlights, notes or looked-up terms yet.";
@@ -55,7 +55,7 @@ function hintFor(rs: RoomState, book: ShelfBook | null, opts: { empty: boolean; 
 
 /** `live` is false while sign-in is confirmed: the room is built from the last list seen, and nothing is queried yet. */
 export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason: "webgl" | "lost") => void }) {
-  const { books, uploads, busy, error, addBooks, addAudio, remove, signOut, setView, onFallback, live } = p;
+  const { books, uploads, busy, error, addBooks, addAudio, remove, signOut, setView, onFallback, live, owner, setShared, checking } = p;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<RoomController | null>(null);
@@ -76,11 +76,12 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
 
   const focusId = rs.bookId ?? rs.hover?.id ?? null;
   const extras = useExtras(live ? focusId : null);
-  const preview = usePreview(live ? rs.bookId : null);
+  const previewId = owner || rs.stage === "open" ? rs.bookId : null;
+  const preview = usePreview(checking ? null : previewId, owner);
 
   const shelfBooks = useMemo(
-    () => (books ?? []).map((b) => toShelfBook(b, uploads[b._id] ?? null, b._id === focusId ? (extras ?? null) : null)),
-    [books, uploads, focusId, extras],
+    () => (books ?? []).map((b) => toShelfBook(b, uploads[b._id] ?? null, b._id === focusId ? (extras ?? null) : null, !owner)),
+    [books, uploads, focusId, extras, owner],
   );
   const held = shelfBooks.find((b) => b.id === rs.bookId) ?? null;
   const hovered = rs.hover ? (shelfBooks.find((b) => b.id === rs.hover!.id) ?? null) : null;
@@ -138,8 +139,8 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
   }, [shelfBooks]);
   // A book in hand is likely to be opened: start on its file.
   useEffect(() => {
-    if (held) warmBook(held.epub, held.epubUrl);
-  }, [held]);
+    if (owner && held) warmBook(held.epub, held.epubUrl);
+  }, [held, owner]);
   const start = useCallback(
     (id: string, listen = false) => {
       const book = booksRef.current.find((b) => b.id === id);
@@ -197,6 +198,7 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
   };
 
   const hint = hintFor(rs, held, { empty, touch, busy, due });
+  const shared = books?.find((book) => book._id === held?.id)?.shared === true;
   const audioReady = held?.audio.kind === "ready";
   const hoverPos = rs.hover && hovered ? { left: Math.max(16, Math.min(vp.w - 296, rs.hover.x + 18)), top: Math.max(76, Math.min(vp.h - 180, rs.hover.y - 124)) } : null;
 
@@ -237,7 +239,7 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
           {rs.stage !== "room" && !(short && inHand) && <Pill onClick={() => call("go", "room")}>Zoom out</Pill>}
         </nav>
         <div className="pointer-events-auto ml-auto flex items-center justify-end gap-2">
-          {!empty && books && (
+          {owner && !empty && books && (
             <Pill onClick={addBooks} disabled={busy} icon={<Plus aria-hidden />} round={roundAdd || short} aria-label={roundAdd || short ? "Add a book" : undefined} title={roundAdd || short ? "Add a book" : undefined}>
               {roundAdd || short ? null : busy ? "Shelving…" : "Add a book"}
             </Pill>
@@ -248,7 +250,7 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
             </Pill>
           )}
           <ViewToggle view="room" onChange={setView} />
-          <Pill round aria-label="Sign out" title="Sign out" onClick={signOut} icon={<LogOut aria-hidden />} />
+          {owner && <Pill round aria-label="Sign out" title="Sign out" onClick={signOut} icon={<LogOut aria-hidden />} />}
         </div>
       </header>
 
@@ -269,14 +271,15 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
         >
           <p className="line-clamp-2 text-base leading-snug font-semibold">{hovered.title}</p>
           {hovered.author && <p className="mt-1 truncate text-sm text-[var(--lib-ink-soft)] italic">{hovered.author}</p>}
-          <p className="sc mt-2 text-sm leading-snug text-[var(--lib-brass)]">{statusLine(hovered)}</p>
+          {statusLine(hovered) && <p className="sc mt-2 text-sm leading-snug text-[var(--lib-brass)]">{statusLine(hovered)}</p>}
         </div>
       )}
 
       {/* empty shelf */}
       {empty && rs.ready && (
         <div className="absolute inset-x-4 bottom-[max(72px,calc(env(safe-area-inset-bottom)+64px))] z-20 mx-auto max-w-sm rounded-2xl border border-[var(--lib-line)] bg-[rgba(16,10,7,0.88)] px-6 py-8 text-center shadow-[0_20px_50px_rgba(0,0,0,0.6)] short:bottom-[max(16px,env(safe-area-inset-bottom))] short:py-5">
-          <h1 className="text-2xl font-semibold">Your shelf is empty</h1>
+          <h1 className="text-2xl font-semibold">{owner ? "Your shelf is empty" : error ? "The shelf is unavailable" : "No books have been shared yet"}</h1>
+          {owner && <>
           <p className="mt-2 text-base text-[var(--lib-muted)]">Add an EPUB to put it on the shelf.</p>
           <div className="mt-6 flex justify-center">
             <Pill tone="primary" size="lg" onClick={addBooks} disabled={busy} icon={<Plus aria-hidden />}>
@@ -284,6 +287,7 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
             </Pill>
           </div>
           <p className="mt-2 text-sm text-[var(--lib-muted)] pointer-coarse:hidden">or drop a file anywhere</p>
+          </>}
         </div>
       )}
 
@@ -311,11 +315,12 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
                 </Pill>
                 <Pill onClick={() => setConfirming(false)}>Keep</Pill>
               </>
-            ) : more ? (
+            ) : owner && more ? (
               <>
                 <Pill icon={<Headphones aria-hidden />} disabled={held.audio.kind === "uploading"} onClick={() => addAudio(held.id)}>
                   {held.audio.kind === "none" ? "Add audiobook" : "Replace audiobook"}
                 </Pill>
+                <Pill onClick={() => void setShared(held.id, !shared)}>{shared ? "Make private" : "Share with readers"}</Pill>
                 <Pill tone="danger" icon={<Trash2 aria-hidden />} onClick={() => setConfirming(true)}>
                   Remove book
                 </Pill>
@@ -334,7 +339,7 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
                     {["Listen", held.audio.kind === "ready" ? duration(held.audio.durationMs) : null].filter(Boolean).join(" · ")}
                   </Pill>
                 )}
-                {(held.audio.kind === "none" || held.audio.kind === "uploading") && (
+                {owner && (held.audio.kind === "none" || held.audio.kind === "uploading") && (
                   <Pill
                     icon={<Headphones aria-hidden />}
                     disabled={held.audio.kind === "uploading"}
@@ -346,7 +351,7 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
                     {held.audio.kind === "uploading" ? `Uploading ${held.audio.pct}%` : short ? null : "Add audiobook"}
                   </Pill>
                 )}
-                <Pill round aria-label="More actions" onClick={() => setMore(true)} icon={<Ellipsis aria-hidden />} />
+                {owner && <Pill round aria-label="More actions" onClick={() => setMore(true)} icon={<Ellipsis aria-hidden />} />}
                 <Pill round aria-label={rs.stage === "open" ? "Next pages" : "Turn right"} onClick={() => (rs.stage === "open" ? call("flip", 1) : call("turn", 1))} icon={<ChevronRight aria-hidden />} />
               </>
             )}
@@ -400,9 +405,9 @@ export function RoomView(p: LibraryProps & { live: boolean; onFallback: (reason:
             <h2>{held.title}</h2>
             {held.author && <p>{held.author}</p>}
             <p>{held.description ?? "No description."}</p>
-            <p>Reading: {progressLabel(held)}</p>
+            {owner && <p>Reading: {progressLabel(held)}</p>}
             <ul>
-              {bookFacts(held).map((f) => (
+              {bookFacts(held).filter((fact) => owner || fact.key === "audio").map((f) => (
                 <li key={f.key}>
                   {f.label}: {f.value}
                   {f.sub ? `. ${f.sub}` : ""}

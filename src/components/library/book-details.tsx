@@ -20,17 +20,19 @@ function activity(x: Extras) {
 export function BookDetails({
   book,
   audio,
-  live,
+  owner,
+  onShare,
   onAddAudio,
   onRemove,
 }: {
   book: ListedBook;
   audio: AudioState;
-  live: boolean;
+  owner: boolean;
+  onShare: (shared: boolean) => Promise<void>;
   onAddAudio: () => void;
   onRemove: () => Promise<void>;
 }) {
-  const extras = useExtras(live ? book._id : null);
+  const extras = useExtras(owner ? book._id : null);
   const [confirm, setConfirm] = useState(false);
   const [preview, setPreview] = useState(false);
   const terms = book.terms.status === "done" && extras ? count(extras.terms, "term marked", "terms marked") : null;
@@ -61,26 +63,33 @@ export function BookDetails({
           </>
         ) : (
           <>
-            <Btn size="sm" aria-expanded={preview} onClick={() => setPreview((p) => !p)} disabled={!live}>
+            <Btn size="sm" aria-expanded={preview} onClick={() => setPreview((p) => !p)}>
               {preview ? "Hide first pages" : "Read the first pages"}
             </Btn>
-            <Btn size="sm" disabled={!live || audio.kind === "uploading"} onClick={onAddAudio}>
-              {audio.kind === "uploading" ? `Uploading ${audio.pct}%` : audio.kind === "none" ? "Add audiobook" : "Replace audiobook"}
-            </Btn>
-            <Btn size="sm" tone="ghost" disabled={!live} onClick={() => setConfirm(true)}>
-              Remove
-            </Btn>
+            {owner && (
+              <>
+                <Btn size="sm" disabled={audio.kind === "uploading"} onClick={onAddAudio}>
+                  {audio.kind === "uploading" ? `Uploading ${audio.pct}%` : audio.kind === "none" ? "Add audiobook" : "Replace audiobook"}
+                </Btn>
+                <Btn size="sm" onClick={() => void onShare(!book.shared)}>
+                  {book.shared ? "Make private" : "Share with readers"}
+                </Btn>
+                <Btn size="sm" tone="ghost" onClick={() => setConfirm(true)}>
+                  Remove
+                </Btn>
+              </>
+            )}
           </>
         )}
       </div>
 
-      {preview && <FirstPages bookId={book._id} />}
+      {preview && <FirstPages bookId={book._id} owner={owner} />}
     </div>
   );
 }
 
-function FirstPages({ bookId }: { bookId: string }) {
-  const paras = usePreview(bookId);
+function FirstPages({ bookId, owner }: { bookId: string; owner: boolean }) {
+  const paras = usePreview(bookId, owner);
   return (
     <div className="max-w-[62ch] rounded-lg border border-border px-5 py-5 sm:px-8 sm:py-7">
       {paras === undefined ? (

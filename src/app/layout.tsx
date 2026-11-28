@@ -8,6 +8,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "Loam",
+  robots: { index: false, follow: false },
   description: "An EPUB reader with highlights, notes, audiobook sync and an AI reading companion.",
 };
 

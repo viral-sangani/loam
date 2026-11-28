@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import { usePublicLibrary } from "@/components/library/use-public-library";
+import { libraryPath, type PublicDetails } from "@/lib/public-library";
 import type { Contents } from "epubjs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Id } from "@convex/_generated/dataModel";
@@ -13,6 +16,7 @@ import { currentLibraryView } from "@/components/room/view-mode";
 import { takeHandoff, warmBook, type Handoff } from "@/lib/open-book";
 import { cn } from "@/lib/utils";
 import { AskPanel, useAskThread, type Passage } from "./ask-panel";
+import { GuestAudio } from "./guest-audio";
 import { AudioBar } from "./audio-bar";
 import { BookAskPanel } from "./book-ask-panel";
 import { BriefPanel } from "./brief-panel";
@@ -48,21 +52,27 @@ function spotFrom(params: URLSearchParams): Pos | null {
 export function Reader() {
   const id = useParams<{ id: string }>().id as Id<"books">;
   const { isLoading, isAuthenticated } = useConvexAuth();
-  const router = useRouter();
-  // Start on the book file while sign-in is confirmed.
+  const owner = useQuery(api.auth.isAuthenticated, isAuthenticated ? {} : "skip");
+  const checking = isLoading || (isAuthenticated && owner === undefined);
+  const shared = usePublicLibrary<PublicDetails>(checking || owner ? null : libraryPath(id, "book"));
+  // The room starts this download while its camera settles.
   const [handoff] = useState(() => {
     const h = takeHandoff(id);
     if (h) warmBook(h.epub, h.epubUrl);
     return h;
   });
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace("/");
-  }, [isLoading, isAuthenticated, router]);
-  if (!isAuthenticated) return <ReaderBlank />;
-  return <BookReader id={id} handoff={handoff} />;
+  if (checking || (!owner && !shared)) return <ReaderBlank />;
+  return <BookReader key={`${id}:${!!owner}`} id={id} handoff={owner ? handoff : null} shared={owner ? undefined : shared?.data ?? null} sharedError={shared?.error ?? null} />;
 }
 
-function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null }) {
+function BookReader({ id, handoff, shared, sharedError }: {
+  id: Id<"books">;
+  handoff: Handoff | null;
+  shared?: PublicDetails | null;
+  sharedError: string | null;
+}) {
+  const owner = shared === undefined;
+  const guestAudio = shared?.audio;
   const router = useRouter();
   const params = useSearchParams();
   const spot = useMemo(() => spotFrom(params), [params]);
@@ -77,7 +87,7 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
     swipe: () => {},
     relocated: () => {},
   });
-  const reader = useEpubReader(id, viewRef, events, openAt, handoff);
+  const reader = useEpubReader(id, viewRef, events, openAt, handoff, owner ? undefined : shared?.book ?? null);
   const { meta, status, toc, chapterIdx, pagesLeft, percent, prefs, updatePrefs, next, prev, goChapter, jumpTo, goTo, position, flush } = reader;
 
   const [panel, setPanel] = useState<Panel | null>(null);
@@ -102,9 +112,9 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
   }, []);
   const openTerm = useCallback((t: Id<"terms">) => openDetail({ kind: "term", id: t }), [openDetail]);
   const openMark = useCallback((m: Id<"marks">) => openDetail({ kind: "mark", id: m }), [openDetail]);
-  const terms = useTerms(id, contents, openTerm);
-  const marks = useMarks(id, contents, openMark);
-  const selection = useSelection(contents, viewRef);
+  const terms = useTerms(id, owner ? contents : null, openTerm);
+  const marks = useMarks(id, owner ? contents : null, openMark);
+  const selection = useSelection(owner ? contents : null, viewRef);
   const asks = useAskThread(id);
   const { start: startAsk } = asks;
   const ask = useCallback(
@@ -172,11 +182,12 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
   const { clear: clearSelection } = selection;
   const togglePanel = useCallback(
     (p: Panel) => {
+      if (!owner && (p === "notebook" || p === "ask" || p === "recap")) return;
       clearSelection();
       setDetail(null);
       setPanel((cur) => (cur === p ? null : p));
     },
-    [clearSelection],
+    [clearSelection, owner],
   );
   const closePanel = useCallback(() => {
     clearSelection();
@@ -186,13 +197,14 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
   const { toggle: toggleAudio } = audio;
   const extraKeys = useMemo(
     () => ({
-      a: () => setListening((l) => !l),
+      a: () => { if (owner || guestAudio?.length) setListening((l) => !l); },
       k: () => {
+        if (!owner && !guestAudio?.length) return;
         setListening(true);
-        toggleAudio();
+        if (owner) toggleAudio();
       },
     }),
-    [toggleAudio],
+    [toggleAudio, owner, guestAudio],
   );
   const frameKey = useReaderKeys(
     { next: userNext, prev: userPrev, goChapter: userChapter, updatePrefs, prefs },
@@ -267,6 +279,7 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
 
   const { picked } = selection;
   const openedMark = detail?.kind === "mark" ? marks.marks?.find((m) => m._id === detail.id) : undefined;
+  const showAudio = listening && (owner || !!guestAudio?.length);
   const showChrome = chrome || panel !== null || detail !== null || status !== "ready";
 
   return (
@@ -279,7 +292,9 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
         visible={showChrome}
         panel={panel}
         onToggle={togglePanel}
-        listening={listening}
+        listening={showAudio}
+        owner={owner}
+        hasAudio={owner || !!guestAudio?.length}
         onListen={() => setListening((l) => !l)}
         onBack={() => {
           flush();
@@ -297,7 +312,7 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
           // Sideways phones have little height: the top bar floats over the page instead of taking a band.
           "short:pt-[calc(1.25rem+env(safe-area-inset-top))]",
           // Leave room for whichever bar sits at the bottom, so it never covers the last lines.
-          listening && status === "ready"
+          showAudio && status === "ready"
             ? "pb-[calc(6.5rem+env(safe-area-inset-bottom))] short:pb-[calc(6rem+env(safe-area-inset-bottom))]"
             : "pb-[calc(3.5rem+env(safe-area-inset-bottom))] short:pb-[calc(2.25rem+env(safe-area-inset-bottom))]",
         )}
@@ -315,7 +330,7 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
             )}
             {status === "missing" && (
               <p className="text-center text-sm text-muted-foreground">
-                This book is no longer in your library.{" "}
+                {sharedError ?? "This book is unavailable."}{" "}
                 <Link href="/" className="font-medium text-primary underline underline-offset-4">
                   Back to library
                 </Link>
@@ -330,8 +345,8 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
         )}
       </div>
 
-      {listening && status === "ready" ? (
-        <AudioBar audio={audio} onClose={() => setListening(false)} />
+      {showAudio && status === "ready" ? (
+        guestAudio ? <GuestAudio bookId={id} files={guestAudio} onClose={() => setListening(false)} /> : <AudioBar audio={audio} onClose={() => setListening(false)} />
       ) : (
         prefs.showProgress &&
         status === "ready" && <ProgressFooter chapter={toc[chapterIdx]?.label ?? null} pagesLeft={pagesLeft} percent={percent} />
@@ -369,7 +384,7 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
       )}
       {detail?.kind === "ask" && <AskPanel asks={asks} onCite={jump} onClose={closePanel} />}
 
-      {status === "ready" && (
+      {owner && status === "ready" && (
         <ReadingRail
           bookId={id}
           position={position}
@@ -379,7 +394,7 @@ function BookReader({ id, handoff }: { id: Id<"books">; handoff: Handoff | null 
         />
       )}
       {/* Offered when coming back to a book after a few days. */}
-      {status === "ready" && panel === null && detail === null && (
+      {owner && status === "ready" && panel === null && detail === null && (
         <RecapNudge openedAt={lastOpened} onOpen={() => setPanel("recap")} />
       )}
 

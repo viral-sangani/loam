@@ -1,12 +1,12 @@
 import { ConvexError, v } from "convex/values";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { ownerId } from "./auth";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { vAudioFile, vProgress } from "./schema";
 
 export async function requireUser(ctx: QueryCtx | MutationCtx) {
-  const userId = await getAuthUserId(ctx);
+  const userId = await ownerId(ctx);
   if (!userId) throw new ConvexError("Not signed in");
   return userId;
 }
@@ -74,7 +74,7 @@ async function deleteOwnFile(ctx: MutationCtx, userId: Id<"users">, storageId: I
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await ownerId(ctx);
     if (!userId) return [];
     const books = await ctx.db
       .query("books")
@@ -84,6 +84,7 @@ export const list = query({
     return Promise.all(
       books.map(async (b) => ({
         _id: b._id,
+        shared: b.shared === true,
         title: b.title,
         author: b.author,
         description: b.description ?? null,
@@ -113,7 +114,7 @@ export const list = query({
 export const get = query({
   args: { bookId: v.id("books") },
   handler: async (ctx, { bookId }) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await ownerId(ctx);
     const book = await ctx.db.get(bookId);
     if (!userId || !book || book.userId !== userId) return null;
     const audioFiles = book.audio

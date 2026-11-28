@@ -16,6 +16,9 @@ export type LibraryProps = {
   addAudio: (bookId: string) => void;
   remove: (bookId: string) => Promise<void>;
   signOut: () => void;
+  owner: boolean;
+  checking: boolean;
+  setShared: (bookId: string, shared: boolean) => Promise<void>;
   view: LibraryView;
   setView: (v: LibraryView) => void;
   canRoom: boolean;

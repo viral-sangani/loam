@@ -13,6 +13,8 @@ export function TopBar({
   onBack,
   listening,
   onListen,
+  owner,
+  hasAudio,
 }: {
   title: string | undefined;
   visible: boolean;
@@ -21,6 +23,8 @@ export function TopBar({
   onBack: () => void;
   listening: boolean;
   onListen: () => void;
+  owner: boolean;
+  hasAudio: boolean;
 }) {
   const on = (...ps: Panel[]) => panel !== null && ps.includes(panel);
   return (
@@ -45,9 +49,10 @@ export function TopBar({
       </div>
       <p className="hidden max-w-md min-w-0 shrink truncate text-center text-sm text-muted-foreground sm:block">{title}</p>
       <div className="flex flex-1 basis-0 items-center justify-end gap-1 pointer-coarse:gap-2">
-        <IconBtn label="Audiobook" aria-pressed={listening} active={listening} onClick={onListen}>
+        {hasAudio && <IconBtn label="Audiobook" aria-pressed={listening} active={listening} onClick={onListen}>
           <Headphones />
-        </IconBtn>
+        </IconBtn>}
+        {owner && <>
         {/* One button for "ask" and "recap", two views of the same companion switched inside the panel; it closes either. */}
         <IconBtn label="Ask" active={on("ask", "recap")} onClick={() => onToggle(panel === "recap" ? "recap" : "ask")}>
           <MessageCircleQuestionMark />
@@ -55,6 +60,7 @@ export function TopBar({
         <IconBtn label="Notebook" active={on("notebook")} onClick={() => onToggle("notebook")}>
           <NotebookPen />
         </IconBtn>
+        </>}
         <IconBtn label="Contents" active={on("toc")} onClick={() => onToggle("toc")}>
           <List />
         </IconBtn>
